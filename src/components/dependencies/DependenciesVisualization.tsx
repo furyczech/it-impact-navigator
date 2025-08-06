@@ -1,0 +1,274 @@
+import { useState, useCallback } from "react";
+import { ComponentDependency, ITComponent } from "@/types/itiac";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Network, GitBranch, AlertTriangle, Zap, Plus } from "lucide-react";
+
+// Mock data
+const mockComponents: ITComponent[] = [
+  { id: "1", name: "Database Cluster", type: "database", status: "online", criticality: "critical", lastUpdated: new Date() },
+  { id: "2", name: "API Gateway", type: "api", status: "online", criticality: "high", lastUpdated: new Date() },
+  { id: "3", name: "Load Balancer", type: "load-balancer", status: "warning", criticality: "high", lastUpdated: new Date() },
+  { id: "4", name: "Web Server 1", type: "server", status: "online", criticality: "medium", lastUpdated: new Date() },
+  { id: "5", name: "Web Server 2", type: "server", status: "online", criticality: "medium", lastUpdated: new Date() },
+  { id: "6", name: "Cache Layer", type: "service", status: "online", criticality: "high", lastUpdated: new Date() }
+];
+
+const mockDependencies: ComponentDependency[] = [
+  { id: "d1", sourceId: "2", targetId: "1", type: "requires", criticality: "critical" },
+  { id: "d2", sourceId: "3", targetId: "4", type: "feeds", criticality: "high" },
+  { id: "d3", sourceId: "3", targetId: "5", type: "feeds", criticality: "high" },
+  { id: "d4", sourceId: "4", targetId: "2", type: "uses", criticality: "high" },
+  { id: "d5", sourceId: "5", targetId: "2", type: "uses", criticality: "high" },
+  { id: "d6", sourceId: "2", targetId: "6", type: "uses", criticality: "medium" }
+];
+
+const statusColors = {
+  online: "text-success",
+  offline: "text-destructive",
+  warning: "text-warning",
+  maintenance: "text-secondary"
+};
+
+const criticalityColors = {
+  low: "border-muted",
+  medium: "border-primary",
+  high: "border-warning",
+  critical: "border-destructive"
+};
+
+export const DependenciesVisualization = () => {
+  const [components] = useState<ITComponent[]>(mockComponents);
+  const [dependencies] = useState<ComponentDependency[]>(mockDependencies);
+  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"all" | "critical" | "offline">("all");
+
+  const getComponentDependencies = useCallback((componentId: string) => {
+    const incoming = dependencies.filter(dep => dep.targetId === componentId);
+    const outgoing = dependencies.filter(dep => dep.sourceId === componentId);
+    return { incoming, outgoing };
+  }, [dependencies]);
+
+  const getFilteredComponents = useCallback(() => {
+    switch (viewMode) {
+      case "critical":
+        return components.filter(c => c.criticality === "critical");
+      case "offline":
+        return components.filter(c => c.status === "offline" || c.status === "warning");
+      default:
+        return components;
+    }
+  }, [components, viewMode]);
+
+  const filteredComponents = getFilteredComponents();
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dependencies Visualization</h1>
+          <p className="text-muted-foreground mt-1">Visualize and manage component dependencies</p>
+        </div>
+        <div className="flex space-x-3">
+          <Select value={viewMode} onValueChange={(value: "all" | "critical" | "offline") => setViewMode(value)}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Components</SelectItem>
+              <SelectItem value="critical">Critical Only</SelectItem>
+              <SelectItem value="offline">Issues Only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button className="bg-gradient-primary hover:opacity-90">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Dependency
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Network className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Dependencies</p>
+                <p className="text-2xl font-bold text-foreground">{dependencies.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-destructive/10 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Critical Paths</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {dependencies.filter(d => d.criticality === "critical").length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-warning/10 rounded-lg">
+                <Zap className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Single Points of Failure</p>
+                <p className="text-2xl font-bold text-foreground">3</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-success/10 rounded-lg">
+                <GitBranch className="w-5 h-5 text-success" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Network Health</p>
+                <p className="text-2xl font-bold text-foreground">98%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Network Map */}
+        <Card className="lg:col-span-2 bg-card border-border shadow-depth">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Network className="w-5 h-5 text-primary" />
+              <span>Dependency Network Map</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-96 bg-muted/20 rounded-lg border-2 border-dashed border-muted flex items-center justify-center">
+              <div className="text-center">
+                <Network className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Interactive network visualization</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Drag & drop components to create dependencies
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Component Details */}
+        <Card className="bg-card border-border shadow-depth">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <GitBranch className="w-5 h-5 text-primary" />
+              <span>Components</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {filteredComponents.map((component) => {
+                const deps = getComponentDependencies(component.id);
+                const isSelected = selectedComponent === component.id;
+                
+                return (
+                  <div
+                    key={component.id}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      isSelected ? "border-primary bg-primary/10" : criticalityColors[component.criticality]
+                    }`}
+                    onClick={() => setSelectedComponent(isSelected ? null : component.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-foreground">{component.name}</span>
+                          <div className={`w-2 h-2 rounded-full ${statusColors[component.status].replace('text-', 'bg-')}`} />
+                        </div>
+                        <div className="flex items-center space-x-4 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {component.type}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {deps.incoming.length} in • {deps.outgoing.length} out
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {isSelected && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Incoming Dependencies</p>
+                            {deps.incoming.length > 0 ? (
+                              <div className="space-y-1 mt-1">
+                                {deps.incoming.map((dep) => {
+                                  const sourceComponent = components.find(c => c.id === dep.sourceId);
+                                  return (
+                                    <div key={dep.id} className="text-xs text-muted-foreground flex items-center space-x-2">
+                                      <span>{sourceComponent?.name}</span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {dep.type}
+                                      </Badge>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">None</p>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Outgoing Dependencies</p>
+                            {deps.outgoing.length > 0 ? (
+                              <div className="space-y-1 mt-1">
+                                {deps.outgoing.map((dep) => {
+                                  const targetComponent = components.find(c => c.id === dep.targetId);
+                                  return (
+                                    <div key={dep.id} className="text-xs text-muted-foreground flex items-center space-x-2">
+                                      <span>{targetComponent?.name}</span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {dep.type}
+                                      </Badge>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">None</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
