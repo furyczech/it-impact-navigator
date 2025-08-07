@@ -4,6 +4,36 @@ import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 import { ComponentsManagement } from "@/components/components/ComponentsManagement";
 import { DependenciesVisualization } from "@/components/dependencies/DependenciesVisualization";
 import { WorkflowsManagement } from "@/components/workflows/WorkflowsManagement";
+import { ImpactAnalysisEngine } from "@/components/analysis/ImpactAnalysisEngine";
+import { ITComponent, ComponentDependency, BusinessWorkflow } from "@/types/itiac";
+
+// Mock data for impact analysis
+const mockComponents: ITComponent[] = [
+  { id: "1", name: "Database Cluster", type: "database", status: "online", criticality: "critical", lastUpdated: new Date() },
+  { id: "2", name: "API Gateway", type: "api", status: "online", criticality: "high", lastUpdated: new Date() },
+  { id: "3", name: "Load Balancer", type: "load-balancer", status: "warning", criticality: "high", lastUpdated: new Date() },
+];
+
+const mockDependencies: ComponentDependency[] = [
+  { id: "d1", sourceId: "2", targetId: "1", type: "requires", criticality: "critical" },
+  { id: "d2", sourceId: "3", targetId: "2", type: "feeds", criticality: "high" },
+];
+
+const mockWorkflows: BusinessWorkflow[] = [
+  {
+    id: "1",
+    name: "Customer Order Processing",
+    description: "End-to-end customer order processing",
+    businessProcess: "Sales",
+    criticality: "critical",
+    owner: "Sales Team",
+    lastUpdated: new Date(),
+    steps: [
+      { id: "s1", name: "Order Validation", description: "Validate order", primaryComponentId: "2", alternativeComponentIds: [], order: 1 },
+      { id: "s2", name: "Payment Processing", description: "Process payment", primaryComponentId: "1", alternativeComponentIds: [], order: 2 }
+    ]
+  }
+];
 
 const Index = () => {
   const [currentPage, setCurrentPage] = useState("dashboard");
@@ -24,9 +54,12 @@ const Index = () => {
         return <WorkflowsManagement />;
       case "analysis":
         return (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Impact Analysis</h2>
-            <p className="text-muted-foreground">Advanced impact analysis engine coming soon...</p>
+          <div>
+            <ImpactAnalysisEngine 
+              components={mockComponents}
+              dependencies={mockDependencies}
+              workflows={mockWorkflows}
+            />
           </div>
         );
       case "data":

@@ -89,10 +89,11 @@ const criticalityColors = {
 } as const;
 
 export const ComponentsManagement = () => {
-  const [components] = useState<ITComponent[]>(mockComponents);
+  const [components, setComponents] = useState<ITComponent[]>(mockComponents);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [newComponent, setNewComponent] = useState({ name: "", type: "", criticality: "" });
 
   const filteredComponents = components.filter(component => {
     const matchesSearch = component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -123,8 +124,12 @@ export const ComponentsManagement = () => {
               <DialogTitle>Add New Component</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
-              <Input placeholder="Component name" />
-              <Select>
+              <Input 
+                placeholder="Component name" 
+                value={newComponent.name}
+                onChange={(e) => setNewComponent({...newComponent, name: e.target.value})}
+              />
+              <Select value={newComponent.type} onValueChange={(value) => setNewComponent({...newComponent, type: value})}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -138,7 +143,7 @@ export const ComponentsManagement = () => {
                   <SelectItem value="service">Service</SelectItem>
                 </SelectContent>
               </Select>
-              <Select>
+              <Select value={newComponent.criticality} onValueChange={(value) => setNewComponent({...newComponent, criticality: value})}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select criticality" />
                 </SelectTrigger>
@@ -151,7 +156,23 @@ export const ComponentsManagement = () => {
               </Select>
               <div className="flex justify-end space-x-2 pt-4">
                 <Button variant="outline">Cancel</Button>
-                <Button>Create Component</Button>
+                <Button onClick={() => {
+                  if (newComponent.name && newComponent.type && newComponent.criticality) {
+                    const component: ITComponent = {
+                      id: Date.now().toString(),
+                      name: newComponent.name,
+                      type: newComponent.type as any,
+                      status: "online",
+                      criticality: newComponent.criticality as any,
+                      description: `New ${newComponent.type} component`,
+                      location: "Data Center A",
+                      owner: "System Admin",
+                      lastUpdated: new Date()
+                    };
+                    setComponents([...components, component]);
+                    setNewComponent({ name: "", type: "", criticality: "" });
+                  }
+                }}>Create Component</Button>
               </div>
             </div>
           </DialogContent>

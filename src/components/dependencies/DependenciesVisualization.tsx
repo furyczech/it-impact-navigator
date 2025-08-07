@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Network, GitBranch, AlertTriangle, Zap, Plus } from "lucide-react";
 import '@xyflow/react/dist/style.css';
+import { DependencyNetworkFlow } from './DependencyNetworkFlow';
 
 // Mock data
 const mockComponents: ITComponent[] = [
@@ -164,16 +165,14 @@ export const DependenciesVisualization = () => {
               <span>Dependency Network Map</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-96 bg-muted/20 rounded-lg border-2 border-dashed border-muted flex items-center justify-center">
-              <div className="text-center">
-                <Network className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Interactive network visualization</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Drag & drop components to create dependencies
-                </p>
-              </div>
-            </div>
+          <CardContent className="p-0">
+            <DependencyNetworkFlow 
+              components={filteredComponents}
+              dependencies={dependencies}
+              onAddDependency={(sourceId: string, targetId: string) => {
+                console.log('Adding dependency:', sourceId, '->', targetId);
+              }}
+            />
           </CardContent>
         </Card>
 
