@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Network, GitBranch, AlertTriangle, Zap, Plus } from "lucide-react";
+import '@xyflow/react/dist/style.css';
 
 // Mock data
 const mockComponents: ITComponent[] = [
