@@ -93,6 +93,7 @@ export const ComponentsManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newComponent, setNewComponent] = useState({ name: "", type: "", criticality: "" });
 
   const filteredComponents = components.filter(component => {
@@ -112,7 +113,7 @@ export const ComponentsManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">Components Management</h1>
           <p className="text-muted-foreground mt-1">Manage IT components and their configurations</p>
         </div>
-        <Dialog>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-primary hover:opacity-90">
               <Plus className="w-4 h-4 mr-2" />
@@ -155,7 +156,7 @@ export const ComponentsManagement = () => {
                 </SelectContent>
               </Select>
               <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button onClick={() => {
                   if (newComponent.name && newComponent.type && newComponent.criticality) {
                     const component: ITComponent = {
@@ -171,6 +172,7 @@ export const ComponentsManagement = () => {
                     };
                     setComponents([...components, component]);
                     setNewComponent({ name: "", type: "", criticality: "" });
+                    setIsDialogOpen(false);
                   }
                 }}>Create Component</Button>
               </div>

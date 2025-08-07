@@ -10,6 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Network, GitBranch, AlertTriangle, Zap, Plus } from "lucide-react";
 import '@xyflow/react/dist/style.css';
 import { DependencyNetworkFlow } from './DependencyNetworkFlow';
@@ -48,10 +55,12 @@ const criticalityColors = {
 };
 
 export const DependenciesVisualization = () => {
-  const [components] = useState<ITComponent[]>(mockComponents);
-  const [dependencies] = useState<ComponentDependency[]>(mockDependencies);
+  const [components, setComponents] = useState<ITComponent[]>(mockComponents);
+  const [dependencies, setDependencies] = useState<ComponentDependency[]>(mockDependencies);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "critical" | "offline">("all");
+  const [isDepDialogOpen, setIsDepDialogOpen] = useState(false);
+  const [newDependency, setNewDependency] = useState({ sourceId: "", targetId: "", type: "", criticality: "" });
 
   const getComponentDependencies = useCallback((componentId: string) => {
     const incoming = dependencies.filter(dep => dep.targetId === componentId);
@@ -91,10 +100,84 @@ export const DependenciesVisualization = () => {
               <SelectItem value="offline">Issues Only</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="bg-gradient-primary hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Dependency
-          </Button>
+          <Dialog open={isDepDialogOpen} onOpenChange={setIsDepDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-primary hover:opacity-90">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Dependency
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Dependency</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <Select value={newDependency.sourceId} onValueChange={(value) => setNewDependency({...newDependency, sourceId: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select source component" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {components.map(component => (
+                      <SelectItem key={component.id} value={component.id}>
+                        {component.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={newDependency.targetId} onValueChange={(value) => setNewDependency({...newDependency, targetId: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select target component" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {components.map(component => (
+                      <SelectItem key={component.id} value={component.id}>
+                        {component.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={newDependency.type} onValueChange={(value) => setNewDependency({...newDependency, type: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select dependency type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="requires">Requires</SelectItem>
+                    <SelectItem value="uses">Uses</SelectItem>
+                    <SelectItem value="feeds">Feeds</SelectItem>
+                    <SelectItem value="monitors">Monitors</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={newDependency.criticality} onValueChange={(value) => setNewDependency({...newDependency, criticality: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select criticality" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsDepDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={() => {
+                    if (newDependency.sourceId && newDependency.targetId && newDependency.type && newDependency.criticality) {
+                      const dependency: ComponentDependency = {
+                        id: Date.now().toString(),
+                        sourceId: newDependency.sourceId,
+                        targetId: newDependency.targetId,
+                        type: newDependency.type as any,
+                        criticality: newDependency.criticality as any
+                      };
+                      setDependencies([...dependencies, dependency]);
+                      setNewDependency({ sourceId: "", targetId: "", type: "", criticality: "" });
+                      setIsDepDialogOpen(false);
+                    }
+                  }}>Create Dependency</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -170,7 +253,14 @@ export const DependenciesVisualization = () => {
               components={filteredComponents}
               dependencies={dependencies}
               onAddDependency={(sourceId: string, targetId: string) => {
-                console.log('Adding dependency:', sourceId, '->', targetId);
+                const dependency: ComponentDependency = {
+                  id: Date.now().toString(),
+                  sourceId,
+                  targetId,
+                  type: "uses",
+                  criticality: "medium"
+                };
+                setDependencies([...dependencies, dependency]);
               }}
             />
           </CardContent>
