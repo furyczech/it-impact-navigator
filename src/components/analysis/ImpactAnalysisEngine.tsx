@@ -37,7 +37,7 @@ interface ImpactResult {
 }
 
 export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: ImpactAnalysisEngineProps) => {
-  const [selectedComponent, setSelectedComponent] = useState<string>("");
+  const [selectedComponent, setSelectedComponent] = useState<string>("all");
   const [analysisResults, setAnalysisResults] = useState<ImpactResult[]>([]);
 
   const analyzeImpact = (componentId: string): ImpactResult => {
@@ -119,7 +119,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
   };
 
   const runAnalysis = () => {
-    if (selectedComponent) {
+    if (selectedComponent && selectedComponent !== "all") {
       const result = analyzeImpact(selectedComponent);
       setAnalysisResults([result]);
     } else {
@@ -175,7 +175,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                   <SelectValue placeholder="Select component to analyze (leave empty for all)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Components</SelectItem>
+                  <SelectItem value="all">All Components</SelectItem>
                   {components.map(component => (
                     <SelectItem key={component.id} value={component.id}>
                       {component.name} ({component.type})
