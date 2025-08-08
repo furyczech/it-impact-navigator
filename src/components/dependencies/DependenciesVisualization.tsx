@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useItiacStore } from "@/store/useItiacStore";
 import { ComponentDependency, ITComponent } from "@/types/itiac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,24 +22,6 @@ import { Network, GitBranch, AlertTriangle, Zap, Plus } from "lucide-react";
 import '@xyflow/react/dist/style.css';
 import { DependencyNetworkFlow } from './DependencyNetworkFlow';
 
-// Mock data
-const mockComponents: ITComponent[] = [
-  { id: "1", name: "Database Cluster", type: "database", status: "online", criticality: "critical", lastUpdated: new Date() },
-  { id: "2", name: "API Gateway", type: "api", status: "online", criticality: "high", lastUpdated: new Date() },
-  { id: "3", name: "Load Balancer", type: "load-balancer", status: "warning", criticality: "high", lastUpdated: new Date() },
-  { id: "4", name: "Web Server 1", type: "server", status: "online", criticality: "medium", lastUpdated: new Date() },
-  { id: "5", name: "Web Server 2", type: "server", status: "online", criticality: "medium", lastUpdated: new Date() },
-  { id: "6", name: "Cache Layer", type: "service", status: "online", criticality: "high", lastUpdated: new Date() }
-];
-
-const mockDependencies: ComponentDependency[] = [
-  { id: "d1", sourceId: "2", targetId: "1", type: "requires", criticality: "critical" },
-  { id: "d2", sourceId: "3", targetId: "4", type: "feeds", criticality: "high" },
-  { id: "d3", sourceId: "3", targetId: "5", type: "feeds", criticality: "high" },
-  { id: "d4", sourceId: "4", targetId: "2", type: "uses", criticality: "high" },
-  { id: "d5", sourceId: "5", targetId: "2", type: "uses", criticality: "high" },
-  { id: "d6", sourceId: "2", targetId: "6", type: "uses", criticality: "medium" }
-];
 
 const statusColors = {
   online: "text-success",
@@ -55,8 +38,9 @@ const criticalityColors = {
 };
 
 export const DependenciesVisualization = () => {
-  const [components, setComponents] = useState<ITComponent[]>(mockComponents);
-  const [dependencies, setDependencies] = useState<ComponentDependency[]>(mockDependencies);
+  const components = useItiacStore((s) => s.components);
+  const dependencies = useItiacStore((s) => s.dependencies);
+  const addDependency = useItiacStore((s) => s.addDependency);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "critical" | "offline">("all");
   const [isDepDialogOpen, setIsDepDialogOpen] = useState(false);
@@ -169,7 +153,7 @@ export const DependenciesVisualization = () => {
                         type: newDependency.type as any,
                         criticality: newDependency.criticality as any
                       };
-                      setDependencies([...dependencies, dependency]);
+                      addDependency(dependency);
                       setNewDependency({ sourceId: "", targetId: "", type: "", criticality: "" });
                       setIsDepDialogOpen(false);
                     }
@@ -260,7 +244,7 @@ export const DependenciesVisualization = () => {
                   type: "uses",
                   criticality: "medium"
                 };
-                setDependencies([...dependencies, dependency]);
+                addDependency(dependency);
               }}
             />
           </CardContent>

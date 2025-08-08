@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useItiacStore } from "@/store/useItiacStore";
 import { ITComponent } from "@/types/itiac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,41 +29,6 @@ import {
 } from "@/components/ui/select";
 import { Plus, Search, Server, Database, Globe, Zap, Network, Code, Settings } from "lucide-react";
 
-const mockComponents: ITComponent[] = [
-  {
-    id: "1",
-    name: "Main Database Cluster",
-    type: "database",
-    status: "online",
-    criticality: "critical",
-    description: "Primary customer database cluster",
-    location: "Data Center A",
-    owner: "Database Team",
-    lastUpdated: new Date("2024-01-15")
-  },
-  {
-    id: "2", 
-    name: "API Gateway",
-    type: "api",
-    status: "online",
-    criticality: "high",
-    description: "Main API gateway for external services",
-    location: "Cloud Zone 1",
-    owner: "API Team",
-    lastUpdated: new Date("2024-01-14")
-  },
-  {
-    id: "3",
-    name: "Load Balancer",
-    type: "load-balancer", 
-    status: "warning",
-    criticality: "high",
-    description: "Primary load balancer showing high CPU",
-    location: "Data Center A",
-    owner: "Infrastructure Team",
-    lastUpdated: new Date("2024-01-16")
-  }
-];
 
 const componentIcons = {
   server: Server,
@@ -89,7 +55,8 @@ const criticalityColors = {
 } as const;
 
 export const ComponentsManagement = () => {
-  const [components, setComponents] = useState<ITComponent[]>(mockComponents);
+  const components = useItiacStore((s) => s.components);
+  const addComponent = useItiacStore((s) => s.addComponent);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -170,7 +137,7 @@ export const ComponentsManagement = () => {
                       owner: "System Admin",
                       lastUpdated: new Date()
                     };
-                    setComponents([...components, component]);
+                    addComponent(component);
                     setNewComponent({ name: "", type: "", criticality: "" });
                     setIsDialogOpen(false);
                   }
@@ -283,7 +250,7 @@ export const ComponentsManagement = () => {
                     <TableCell className="text-muted-foreground">{component.location}</TableCell>
                     <TableCell className="text-muted-foreground">{component.owner}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {component.lastUpdated.toLocaleDateString()}
+                      {new Date(component.lastUpdated as any).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">

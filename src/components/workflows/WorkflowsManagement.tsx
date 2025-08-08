@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useItiacStore } from "@/store/useItiacStore";
 import { BusinessWorkflow, WorkflowStep, ITComponent } from "@/types/itiac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,77 +29,6 @@ import {
 } from "@/components/ui/select";
 import { Plus, GitBranch, Users, AlertTriangle, CheckCircle, Search, ArrowRight } from "lucide-react";
 
-// Mock data
-const mockComponents: ITComponent[] = [
-  { id: "1", name: "Database Cluster", type: "database", status: "online", criticality: "critical", lastUpdated: new Date() },
-  { id: "2", name: "API Gateway", type: "api", status: "online", criticality: "high", lastUpdated: new Date() },
-  { id: "3", name: "Payment Service", type: "service", status: "online", criticality: "critical", lastUpdated: new Date() }
-];
-
-const mockWorkflows: BusinessWorkflow[] = [
-  {
-    id: "1",
-    name: "Customer Order Processing",
-    description: "End-to-end customer order processing workflow",
-    businessProcess: "Sales",
-    criticality: "critical",
-    owner: "Sales Team",
-    lastUpdated: new Date("2024-01-15"),
-    steps: [
-      {
-        id: "s1",
-        name: "Order Validation",
-        description: "Validate customer order details",
-        primaryComponentId: "2",
-        alternativeComponentIds: [],
-        order: 1
-      },
-      {
-        id: "s2", 
-        name: "Payment Processing",
-        description: "Process customer payment",
-        primaryComponentId: "3",
-        alternativeComponentIds: [],
-        order: 2
-      },
-      {
-        id: "s3",
-        name: "Order Storage",
-        description: "Store order in database",
-        primaryComponentId: "1",
-        alternativeComponentIds: [],
-        order: 3
-      }
-    ]
-  },
-  {
-    id: "2",
-    name: "User Registration",
-    description: "New user registration process",
-    businessProcess: "Customer Management",
-    criticality: "high",
-    owner: "Customer Success Team",
-    lastUpdated: new Date("2024-01-14"),
-    steps: [
-      {
-        id: "s4",
-        name: "Data Validation",
-        description: "Validate user registration data",
-        primaryComponentId: "2",
-        alternativeComponentIds: [],
-        order: 1
-      },
-      {
-        id: "s5",
-        name: "Account Creation",
-        description: "Create user account in database",
-        primaryComponentId: "1",
-        alternativeComponentIds: [],
-        order: 2
-      }
-    ]
-  }
-];
 
 const criticalityColors = {
   low: "outline",
@@ -108,8 +38,8 @@ const criticalityColors = {
 } as const;
 
 export const WorkflowsManagement = () => {
-  const [workflows] = useState<BusinessWorkflow[]>(mockWorkflows);
-  const [components] = useState<ITComponent[]>(mockComponents);
+  const workflows = useItiacStore((s) => s.workflows);
+  const components = useItiacStore((s) => s.components);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCriticality, setFilterCriticality] = useState<string>("all");
   const [selectedWorkflow, setSelectedWorkflow] = useState<BusinessWorkflow | null>(null);
@@ -401,7 +331,7 @@ export const WorkflowsManagement = () => {
                 <div className="pt-4 border-t border-border">
                   <div className="text-sm text-muted-foreground">
                     <div>Owner: {selectedWorkflow.owner}</div>
-                    <div>Last Updated: {selectedWorkflow.lastUpdated.toLocaleDateString()}</div>
+                    <div>Last Updated: {new Date(selectedWorkflow.lastUpdated as any).toLocaleDateString()}</div>
                   </div>
                 </div>
               </div>
