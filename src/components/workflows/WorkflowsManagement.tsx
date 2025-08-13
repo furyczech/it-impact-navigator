@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { BusinessWorkflow, WorkflowStep, ITComponent } from "@/types/itiac";
+import { WorkflowForm } from "@/components/forms/WorkflowForm";
+import { ExportService } from "@/services/exportService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,9 +42,14 @@ const criticalityColors = {
 export const WorkflowsManagement = () => {
   const workflows = useItiacStore((s) => s.workflows);
   const components = useItiacStore((s) => s.components);
+  const addWorkflow = useItiacStore((s) => s.addWorkflow);
+  const updateWorkflow = useItiacStore((s) => s.updateWorkflow);
+  const deleteWorkflow = useItiacStore((s) => s.deleteWorkflow);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCriticality, setFilterCriticality] = useState<string>("all");
   const [selectedWorkflow, setSelectedWorkflow] = useState<BusinessWorkflow | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingWorkflow, setEditingWorkflow] = useState<BusinessWorkflow | null>(null);
 
   const filteredWorkflows = workflows.filter(workflow => {
     const matchesSearch = workflow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -78,38 +85,33 @@ export const WorkflowsManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">Workflows Management</h1>
           <p className="text-muted-foreground mt-1">Define and manage business process workflows</p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-primary hover:opacity-90">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Workflow
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create New Workflow</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <Input placeholder="Workflow name" />
-              <Input placeholder="Business process" />
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select criticality" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline">Cancel</Button>
-                <Button>Create Workflow</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex space-x-2">
+          <Button onClick={() => setIsFormOpen(true)} className="bg-gradient-primary hover:opacity-90">
+            <Plus className="w-4 h-4 mr-2" />
+            Create Workflow
+          </Button>
+          <Button variant="outline" onClick={() => ExportService.exportWorkflowsToCSV(workflows, components)}>
+            Export CSV
+          </Button>
+        </div>
+        
+        <WorkflowForm
+          isOpen={isFormOpen}
+          onClose={() => {
+            setIsFormOpen(false);
+            setEditingWorkflow(null);
+          }}
+          onSave={(workflow) => {
+            if (editingWorkflow) {
+              updateWorkflow(workflow.id, workflow);
+            } else {
+              addWorkflow(workflow);
+            }
+          }}
+          workflow={editingWorkflow || undefined}
+          components={components}
+          isEdit={!!editingWorkflow}
+        />
       </div>
 
       {/* Stats */}

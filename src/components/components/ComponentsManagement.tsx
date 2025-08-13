@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { ITComponent } from "@/types/itiac";
+import { ComponentForm } from "@/components/forms/ComponentForm";
+import { ExportService } from "@/services/exportService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,11 +59,13 @@ const criticalityColors = {
 export const ComponentsManagement = () => {
   const components = useItiacStore((s) => s.components);
   const addComponent = useItiacStore((s) => s.addComponent);
+  const updateComponent = useItiacStore((s) => s.updateComponent);
+  const deleteComponent = useItiacStore((s) => s.deleteComponent);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newComponent, setNewComponent] = useState({ name: "", type: "", criticality: "" });
+  const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
 
   const filteredComponents = components.filter(component => {
     const matchesSearch = component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -80,72 +84,32 @@ export const ComponentsManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">Components Management</h1>
           <p className="text-muted-foreground mt-1">Manage IT components and their configurations</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-primary hover:opacity-90">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Component
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Component</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <Input 
-                placeholder="Component name" 
-                value={newComponent.name}
-                onChange={(e) => setNewComponent({...newComponent, name: e.target.value})}
-              />
-              <Select value={newComponent.type} onValueChange={(value) => setNewComponent({...newComponent, type: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="server">Server</SelectItem>
-                  <SelectItem value="database">Database</SelectItem>
-                  <SelectItem value="api">API</SelectItem>
-                  <SelectItem value="load-balancer">Load Balancer</SelectItem>
-                  <SelectItem value="network">Network</SelectItem>
-                  <SelectItem value="application">Application</SelectItem>
-                  <SelectItem value="service">Service</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={newComponent.criticality} onValueChange={(value) => setNewComponent({...newComponent, criticality: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select criticality" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => {
-                  if (newComponent.name && newComponent.type && newComponent.criticality) {
-                    const component: ITComponent = {
-                      id: Date.now().toString(),
-                      name: newComponent.name,
-                      type: newComponent.type as any,
-                      status: "online",
-                      criticality: newComponent.criticality as any,
-                      description: `New ${newComponent.type} component`,
-                      location: "Data Center A",
-                      owner: "System Admin",
-                      lastUpdated: new Date()
-                    };
-                    addComponent(component);
-                    setNewComponent({ name: "", type: "", criticality: "" });
-                    setIsDialogOpen(false);
-                  }
-                }}>Create Component</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex space-x-2">
+          <Button onClick={() => setIsDialogOpen(true)} className="bg-gradient-primary hover:opacity-90">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Component
+          </Button>
+          <Button variant="outline" onClick={() => ExportService.exportComponentsToCSV(components)}>
+            Export CSV
+          </Button>
+        </div>
+        
+        <ComponentForm
+          isOpen={isDialogOpen}
+          onClose={() => {
+            setIsDialogOpen(false);
+            setEditingComponent(null);
+          }}
+          onSave={(component) => {
+            if (editingComponent) {
+              updateComponent(component.id, component);
+            } else {
+              addComponent(component);
+            }
+          }}
+          component={editingComponent || undefined}
+          isEdit={!!editingComponent}
+        />
       </div>
 
       {/* Filters */}
@@ -254,8 +218,24 @@ export const ComponentsManagement = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button variant="ghost" size="sm">Edit</Button>
-                        <Button variant="ghost" size="sm">Dependencies</Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => {
+                            setEditingComponent(component);
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => deleteComponent(component.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Delete
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

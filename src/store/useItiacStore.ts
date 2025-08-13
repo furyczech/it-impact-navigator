@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ITComponent, ComponentDependency, BusinessWorkflow } from '@/types/itiac';
+import { AuditService } from '@/services/auditService';
 
 interface ItiacState {
   components: ITComponent[];
@@ -9,8 +10,16 @@ interface ItiacState {
   // actions
   addComponent: (component: ITComponent) => void;
   updateComponent: (id: string, patch: Partial<ITComponent>) => void;
+  deleteComponent: (id: string) => void;
   addDependency: (dependency: ComponentDependency) => void;
+  updateDependency: (id: string, patch: Partial<ComponentDependency>) => void;
+  deleteDependency: (id: string) => void;
   addWorkflow: (workflow: BusinessWorkflow) => void;
+  updateWorkflow: (id: string, patch: Partial<BusinessWorkflow>) => void;
+  deleteWorkflow: (id: string) => void;
+  // bulk operations
+  importData: (data: { components?: ITComponent[]; dependencies?: ComponentDependency[]; workflows?: BusinessWorkflow[] }) => void;
+  resetAllData: () => void;
 }
 
 const initialComponents: ITComponent[] = [
@@ -69,21 +78,152 @@ export const useItiacStore = create<ItiacState>()(
       dependencies: initialDependencies,
       workflows: initialWorkflows,
 
-      addComponent: (component) => set((state) => ({
-        components: [...state.components, component],
-      })),
+      addComponent: (component) => {
+        AuditService.logComponentAction('CREATE', component);
+        set((state) => ({
+          components: [...state.components, component],
+        }));
+      },
 
-      updateComponent: (id, patch) => set((state) => ({
-        components: state.components.map((c) => (c.id === id ? { ...c, ...patch, lastUpdated: new Date() } : c)),
-      })),
+      updateComponent: (id, patch) => {
+        const state = get();
+        const beforeComponent = state.components.find(c => c.id === id);
+        const updatedComponent = { ...beforeComponent, ...patch, lastUpdated: new Date() };
+        
+        if (beforeComponent) {
+          AuditService.logComponentAction('UPDATE', updatedComponent, beforeComponent);
+        }
+        
+        set((state) => ({
+          components: state.components.map((c) => (c.id === id ? updatedComponent : c)),
+        }));
+      },
 
-      addDependency: (dependency) => set((state) => ({
-        dependencies: [...state.dependencies, dependency],
-      })),
+      deleteComponent: (id) => {
+        const state = get();
+        const component = state.components.find(c => c.id === id);
+        
+        if (component) {
+          AuditService.logComponentAction('DELETE', component);
+          
+          // Also remove related dependencies
+          const relatedDependencies = state.dependencies.filter(d => d.sourceId === id || d.targetId === id);
+          relatedDependencies.forEach(dep => {
+            const sourceComponent = state.components.find(c => c.id === dep.sourceId);
+            const targetComponent = state.components.find(c => c.id === dep.targetId);
+            AuditService.logDependencyAction('DELETE', dep, sourceComponent?.name, targetComponent?.name);
+          });
+          
+          set((state) => ({
+            components: state.components.filter(c => c.id !== id),
+            dependencies: state.dependencies.filter(d => d.sourceId !== id && d.targetId !== id),
+          }));
+        }
+      },
 
-      addWorkflow: (workflow) => set((state) => ({
-        workflows: [...state.workflows, workflow],
-      })),
+      addDependency: (dependency) => {
+        const state = get();
+        const sourceComponent = state.components.find(c => c.id === dependency.sourceId);
+        const targetComponent = state.components.find(c => c.id === dependency.targetId);
+        
+        AuditService.logDependencyAction('CREATE', dependency, sourceComponent?.name, targetComponent?.name);
+        
+        set((state) => ({
+          dependencies: [...state.dependencies, dependency],
+        }));
+      },
+
+      updateDependency: (id, patch) => {
+        const state = get();
+        const beforeDependency = state.dependencies.find(d => d.id === id);
+        const updatedDependency = { ...beforeDependency, ...patch };
+        
+        if (beforeDependency) {
+          const sourceComponent = state.components.find(c => c.id === updatedDependency.sourceId);
+          const targetComponent = state.components.find(c => c.id === updatedDependency.targetId);
+          AuditService.logDependencyAction('UPDATE', updatedDependency, sourceComponent?.name, targetComponent?.name, beforeDependency);
+        }
+        
+        set((state) => ({
+          dependencies: state.dependencies.map((d) => (d.id === id ? updatedDependency : d)),
+        }));
+      },
+
+      deleteDependency: (id) => {
+        const state = get();
+        const dependency = state.dependencies.find(d => d.id === id);
+        
+        if (dependency) {
+          const sourceComponent = state.components.find(c => c.id === dependency.sourceId);
+          const targetComponent = state.components.find(c => c.id === dependency.targetId);
+          AuditService.logDependencyAction('DELETE', dependency, sourceComponent?.name, targetComponent?.name);
+          
+          set((state) => ({
+            dependencies: state.dependencies.filter(d => d.id !== id),
+          }));
+        }
+      },
+
+      addWorkflow: (workflow) => {
+        AuditService.logWorkflowAction('CREATE', workflow);
+        set((state) => ({
+          workflows: [...state.workflows, workflow],
+        }));
+      },
+
+      updateWorkflow: (id, patch) => {
+        const state = get();
+        const beforeWorkflow = state.workflows.find(w => w.id === id);
+        const updatedWorkflow = { ...beforeWorkflow, ...patch, lastUpdated: new Date() };
+        
+        if (beforeWorkflow) {
+          AuditService.logWorkflowAction('UPDATE', updatedWorkflow, beforeWorkflow);
+        }
+        
+        set((state) => ({
+          workflows: state.workflows.map((w) => (w.id === id ? updatedWorkflow : w)),
+        }));
+      },
+
+      deleteWorkflow: (id) => {
+        const state = get();
+        const workflow = state.workflows.find(w => w.id === id);
+        
+        if (workflow) {
+          AuditService.logWorkflowAction('DELETE', workflow);
+          
+          set((state) => ({
+            workflows: state.workflows.filter(w => w.id !== id),
+          }));
+        }
+      },
+
+      importData: (data) => {
+        if (data.components) {
+          AuditService.logImport('components', 'bulk-import', data.components.length);
+        }
+        if (data.dependencies) {
+          AuditService.logImport('dependencies', 'bulk-import', data.dependencies.length);
+        }
+        if (data.workflows) {
+          AuditService.logImport('workflows', 'bulk-import', data.workflows.length);
+        }
+        
+        set((state) => ({
+          components: data.components || state.components,
+          dependencies: data.dependencies || state.dependencies,
+          workflows: data.workflows || state.workflows,
+        }));
+      },
+
+      resetAllData: () => {
+        AuditService.log('DELETE', 'SYSTEM', { action: 'reset_all_data' });
+        set(() => ({
+          components: initialComponents,
+          dependencies: initialDependencies,
+          workflows: initialWorkflows,
+        }));
+      },
     }),
     {
       name: 'itiac-store',
