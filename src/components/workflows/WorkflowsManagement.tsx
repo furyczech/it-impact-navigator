@@ -29,7 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, GitBranch, Users, AlertTriangle, CheckCircle, Search, ArrowRight } from "lucide-react";
+import { Plus, GitBranch, Users, AlertTriangle, CheckCircle, Search, ArrowRight, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 const criticalityColors = {
@@ -66,12 +67,14 @@ export const WorkflowsManagement = () => {
   };
 
   const getWorkflowRisk = (workflow: BusinessWorkflow) => {
-    // Simple risk calculation based on critical components
+    // Simple risk calculation based on critical primary components (supports multi-primary)
     const criticalSteps = workflow.steps.filter(step => {
-      const component = components.find(c => c.id === step.primaryComponentId);
-      return component?.criticality === "critical";
+      const primaryIds = (step.primaryComponentIds && step.primaryComponentIds.length > 0)
+        ? step.primaryComponentIds
+        : (step.primaryComponentId ? [step.primaryComponentId] : []);
+      return primaryIds.some(pid => components.find(c => c.id === pid)?.criticality === "critical");
     });
-    
+
     if (criticalSteps.length === workflow.steps.length) return "high";
     if (criticalSteps.length > 0) return "medium";
     return "low";
@@ -123,7 +126,19 @@ export const WorkflowsManagement = () => {
                 <GitBranch className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Workflows</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Total Workflows
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Celkový počet definovaných business workflow v systému.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">{workflows.length}</p>
               </div>
             </div>
@@ -136,7 +151,19 @@ export const WorkflowsManagement = () => {
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Critical Workflows</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Critical Workflows
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Počet workflow označených kritičností "critical" (nejvyšší důležitost pro business).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">
                   {workflows.filter(w => w.criticality === "critical").length}
                 </p>
@@ -151,7 +178,21 @@ export const WorkflowsManagement = () => {
                 <CheckCircle className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Healthy Workflows</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Healthy Workflows
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs text-sm">
+                          Workflow s nízkým rizikem podle aktuální kritičnosti jejich klíčových komponent.
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">
                   {workflows.filter(w => getWorkflowRisk(w) === "low").length}
                 </p>
@@ -166,7 +207,19 @@ export const WorkflowsManagement = () => {
                 <Users className="w-5 h-5 text-secondary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Business Processes</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Business Processes
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Počet unikátních business procesů, ke kterým jsou workflow přiřazena.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">
                   {new Set(workflows.map(w => w.businessProcess)).size}
                 </p>
@@ -268,7 +321,24 @@ export const WorkflowsManagement = () => {
                           >
                             View
                           </Button>
-                          <Button variant="ghost" size="sm">Edit</Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              setEditingWorkflow(workflow);
+                              setIsFormOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => deleteWorkflow(workflow.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Delete
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

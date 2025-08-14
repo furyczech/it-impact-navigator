@@ -7,6 +7,7 @@ export interface ITComponent {
   description?: string;
   location?: string;
   owner?: string;
+  vendor?: string;
   lastUpdated: Date;
   metadata?: Record<string, any>;
 }
@@ -24,7 +25,10 @@ export interface WorkflowStep {
   id: string;
   name: string;
   description?: string;
+  // Deprecated: use primaryComponentIds; kept for backward compatibility when reading older data
   primaryComponentId?: string;
+  // New: allow multiple primary components
+  primaryComponentIds?: string[];
   alternativeComponentIds?: string[];
   fallbackWorkflowId?: string;
   order: number;

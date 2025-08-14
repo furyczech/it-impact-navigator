@@ -26,7 +26,8 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, X, Pencil } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface WorkflowFormProps {
   workflow?: BusinessWorkflow;
@@ -53,11 +54,51 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
   const [newStep, setNewStep] = useState({
     name: "",
     description: "",
-    primaryComponentId: "",
+    primaryComponentIds: [] as string[],
     alternativeComponentIds: [] as string[]
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Edit existing step
+  const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
+  const [editDraft, setEditDraft] = useState({
+    name: "",
+    description: "",
+    primaryComponentIds: [] as string[],
+    alternativeComponentIds: [] as string[],
+  });
+
+  const startEditStep = (step: WorkflowStep) => {
+    setEditingStep(step);
+    setEditDraft({
+      name: step.name,
+      description: step.description || "",
+      primaryComponentIds: (step.primaryComponentIds && step.primaryComponentIds.length > 0)
+        ? step.primaryComponentIds
+        : (step.primaryComponentId ? [step.primaryComponentId] : []),
+      alternativeComponentIds: step.alternativeComponentIds || [],
+    });
+  };
+
+  const saveEditStep = () => {
+    if (!editingStep) return;
+    if (!editDraft.name.trim() || editDraft.primaryComponentIds.length === 0) return;
+
+    const updated = steps.map(s => {
+      if (s.id !== editingStep.id) return s;
+      return {
+        ...s,
+        name: editDraft.name.trim(),
+        description: editDraft.description.trim(),
+        primaryComponentIds: editDraft.primaryComponentIds,
+        primaryComponentId: editDraft.primaryComponentIds[0], // legacy
+        alternativeComponentIds: editDraft.alternativeComponentIds,
+      };
+    });
+    setSteps(updated);
+    setEditingStep(null);
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -104,13 +145,15 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
   };
 
   const addStep = () => {
-    if (!newStep.name.trim() || !newStep.primaryComponentId) return;
+    if (!newStep.name.trim() || newStep.primaryComponentIds.length === 0) return;
 
     const step: WorkflowStep = {
       id: Date.now().toString(),
       name: newStep.name.trim(),
       description: newStep.description.trim(),
-      primaryComponentId: newStep.primaryComponentId,
+      // keep legacy single field as the first selected primary
+      primaryComponentId: newStep.primaryComponentIds[0],
+      primaryComponentIds: newStep.primaryComponentIds,
       alternativeComponentIds: newStep.alternativeComponentIds,
       order: steps.length + 1
     };
@@ -119,7 +162,7 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
     setNewStep({
       name: "",
       description: "",
-      primaryComponentId: "",
+      primaryComponentIds: [],
       alternativeComponentIds: []
     });
   };
@@ -228,21 +271,32 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
                   value={newStep.name}
                   onChange={(e) => setNewStep(prev => ({ ...prev, name: e.target.value }))}
                 />
-                <Select 
-                  value={newStep.primaryComponentId} 
-                  onValueChange={(value) => setNewStep(prev => ({ ...prev, primaryComponentId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Primary component" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {components.map(component => (
-                      <SelectItem key={component.id} value={component.id}>
-                        {component.name} ({component.type})
-                      </SelectItem>
+                <div>
+                  <Label>Primary Components *</Label>
+                  <div className="max-h-40 overflow-y-auto rounded-md border p-2 bg-background">
+                    {components.map(c => (
+                      <div key={c.id} className="flex items-center space-x-2 py-1">
+                        <Checkbox
+                          id={`prim-${c.id}`}
+                          checked={newStep.primaryComponentIds.includes(c.id)}
+                          onCheckedChange={(checked) => {
+                            setNewStep(prev => {
+                              const set = new Set(prev.primaryComponentIds);
+                              if (checked) set.add(c.id); else set.delete(c.id);
+                              return { ...prev, primaryComponentIds: Array.from(set) };
+                            });
+                          }}
+                        />
+                        <Label htmlFor={`prim-${c.id}`} className="text-sm cursor-pointer">
+                          {c.name} ({c.type})
+                        </Label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                  {newStep.primaryComponentIds.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Vyberte alespoň jednu primární komponentu.</p>
+                  )}
+                </div>
               </div>
               <div className="mb-3">
                 <Textarea
@@ -251,6 +305,55 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
                   onChange={(e) => setNewStep(prev => ({ ...prev, description: e.target.value }))}
                   rows={2}
                 />
+              </div>
+              {/* Alternative components selection */}
+              <div className="space-y-2 mb-3">
+                <Label>Alternative Components (optional)</Label>
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2 bg-background">
+                  {components
+                    .filter(c => !newStep.primaryComponentIds.includes(c.id))
+                    .map(c => (
+                      <div key={c.id} className="flex items-center space-x-2 py-1">
+                        <Checkbox
+                          id={`alt-${c.id}`}
+                          checked={newStep.alternativeComponentIds.includes(c.id)}
+                          onCheckedChange={(checked) => {
+                            setNewStep(prev => {
+                              const set = new Set(prev.alternativeComponentIds);
+                              if (checked) set.add(c.id); else set.delete(c.id);
+                              return { ...prev, alternativeComponentIds: Array.from(set) };
+                            });
+                          }}
+                        />
+                        <Label htmlFor={`alt-${c.id}`} className="text-sm cursor-pointer">
+                          {c.name} ({c.type})
+                        </Label>
+                      </div>
+                    ))}
+                </div>
+                {newStep.alternativeComponentIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {newStep.alternativeComponentIds.map(id => {
+                      const comp = components.find(c => c.id === id);
+                      return (
+                        <Badge key={id} variant="outline" className="flex items-center gap-1">
+                          {comp?.name || id}
+                          <button
+                            type="button"
+                            onClick={() => setNewStep(prev => ({
+                              ...prev,
+                              alternativeComponentIds: prev.alternativeComponentIds.filter(cid => cid !== id)
+                            }))}
+                            className="inline-flex items-center justify-center ml-1 hover:text-destructive"
+                            aria-label="Remove alternative"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <Button onClick={addStep} size="sm">
                 <Plus className="w-4 h-4 mr-2" />
@@ -266,8 +369,9 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
                     <TableRow>
                       <TableHead className="w-16">Order</TableHead>
                       <TableHead>Step Name</TableHead>
-                      <TableHead>Primary Component</TableHead>
+                      <TableHead>Primary Components</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Alternatives</TableHead>
                       <TableHead className="w-32">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -279,15 +383,44 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
                         </TableCell>
                         <TableCell className="font-medium">{step.name}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {getComponentName(step.primaryComponentId || "")}
-                          </Badge>
+                          {(step.primaryComponentIds && step.primaryComponentIds.length > 0) ? (
+                            <div className="flex flex-wrap gap-1">
+                              {step.primaryComponentIds.map(id => (
+                                <Badge key={id} variant="secondary">{getComponentName(id)}</Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <Badge variant="secondary">{getComponentName(step.primaryComponentId || "")}</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {step.description || "No description"}
                         </TableCell>
                         <TableCell>
+                          {step.alternativeComponentIds.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {step.alternativeComponentIds.map(id => {
+                                const comp = components.find(c => c.id === id);
+                                return (
+                                  <Badge key={id} variant="outline" className="flex items-center gap-1">
+                                    {comp?.name || id}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <div className="flex space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => startEditStep(step)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -331,6 +464,78 @@ export const WorkflowForm = ({ workflow, components, isOpen, onClose, onSave, is
           </Button>
         </div>
       </DialogContent>
+      {/* Edit Step Dialog */}
+      <Dialog open={!!editingStep} onOpenChange={(open) => { if (!open) setEditingStep(null); }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit Step</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-2">
+                <Label>Step name *</Label>
+                <Input value={editDraft.name} onChange={(e) => setEditDraft(prev => ({ ...prev, name: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea value={editDraft.description} onChange={(e) => setEditDraft(prev => ({ ...prev, description: e.target.value }))} rows={2} />
+              </div>
+              <div className="space-y-2">
+                <Label>Primary Components *</Label>
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2 bg-background">
+                  {components.map(c => (
+                    <div key={c.id} className="flex items-center space-x-2 py-1">
+                      <Checkbox
+                        id={`edit-prim-${c.id}`}
+                        checked={editDraft.primaryComponentIds.includes(c.id)}
+                        onCheckedChange={(checked) => {
+                          setEditDraft(prev => {
+                            const set = new Set(prev.primaryComponentIds);
+                            if (checked) set.add(c.id); else set.delete(c.id);
+                            return { ...prev, primaryComponentIds: Array.from(set) };
+                          });
+                        }}
+                      />
+                      <Label htmlFor={`edit-prim-${c.id}`} className="text-sm cursor-pointer">
+                        {c.name} ({c.type})
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Alternative Components (optional)</Label>
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2 bg-background">
+                  {components
+                    .filter(c => !editDraft.primaryComponentIds.includes(c.id))
+                    .map(c => (
+                      <div key={c.id} className="flex items-center space-x-2 py-1">
+                        <Checkbox
+                          id={`edit-alt-${c.id}`}
+                          checked={editDraft.alternativeComponentIds.includes(c.id)}
+                          onCheckedChange={(checked) => {
+                            setEditDraft(prev => {
+                              const set = new Set(prev.alternativeComponentIds);
+                              if (checked) set.add(c.id); else set.delete(c.id);
+                              return { ...prev, alternativeComponentIds: Array.from(set) };
+                            });
+                          }}
+                        />
+                        <Label htmlFor={`edit-alt-${c.id}`} className="text-sm cursor-pointer">
+                          {c.name} ({c.type})
+                        </Label>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 pt-2">
+            <Button variant="outline" onClick={() => setEditingStep(null)}>Cancel</Button>
+            <Button onClick={saveEditStep}>Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

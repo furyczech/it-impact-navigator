@@ -58,6 +58,8 @@ const criticalityColors = {
 
 export const ComponentsManagement = () => {
   const components = useItiacStore((s) => s.components);
+  const dependencies = useItiacStore((s) => s.dependencies);
+  const workflows = useItiacStore((s) => s.workflows);
   const addComponent = useItiacStore((s) => s.addComponent);
   const updateComponent = useItiacStore((s) => s.updateComponent);
   const deleteComponent = useItiacStore((s) => s.deleteComponent);
@@ -66,15 +68,51 @@ export const ComponentsManagement = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
+  const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
 
   const filteredComponents = components.filter(component => {
-    const matchesSearch = component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         component.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = component.name.toLowerCase().includes(q) ||
+                         component.description?.toLowerCase().includes(q) ||
+                         component.vendor?.toLowerCase().includes(q);
     const matchesType = filterType === "all" || component.type === filterType;
     const matchesStatus = filterStatus === "all" || component.status === filterStatus;
     
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  const sortedComponents = [...filteredComponents].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const get = (c: ITComponent) => {
+      switch (sortBy) {
+        case 'lastUpdated': return new Date(c.lastUpdated as any).getTime();
+        case 'name': return c.name.toLowerCase();
+        case 'type': return c.type.toLowerCase();
+        case 'status': return c.status.toLowerCase();
+        case 'criticality': return c.criticality.toLowerCase();
+        case 'location': return (c.location || '').toLowerCase();
+        case 'vendor': return (c.vendor || '').toLowerCase();
+        case 'owner': return (c.owner || '').toLowerCase();
+        default: return '';
+      }
+    };
+    const va = get(a);
+    const vb = get(b);
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+  });
+
+  const headerSort = (key: typeof sortBy) => {
+    if (sortBy === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortIndicator = (key: typeof sortBy) => sortBy === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
   return (
     <div className="space-y-6">
@@ -89,8 +127,8 @@ export const ComponentsManagement = () => {
             <Plus className="w-4 h-4 mr-2" />
             Add Component
           </Button>
-          <Button variant="outline" onClick={() => ExportService.exportComponentsToCSV(components)}>
-            Export CSV
+          <Button variant="outline" onClick={() => ExportService.exportFullBackup(components, dependencies, workflows)}>
+            Export JSON
           </Button>
         </div>
         
@@ -135,8 +173,6 @@ export const ComponentsManagement = () => {
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="server">Server</SelectItem>
                 <SelectItem value="database">Database</SelectItem>
-                <SelectItem value="api">API</SelectItem>
-                <SelectItem value="load-balancer">Load Balancer</SelectItem>
                 <SelectItem value="network">Network</SelectItem>
                 <SelectItem value="application">Application</SelectItem>
                 <SelectItem value="service">Service</SelectItem>
@@ -170,29 +206,53 @@ export const ComponentsManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Component</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Criticality</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Last Updated</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('name')}>Component{sortIndicator('name')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('type')}>Type{sortIndicator('type')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('status')}>Status{sortIndicator('status')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('criticality')}>Criticality{sortIndicator('criticality')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('location')}>Location{sortIndicator('location')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('vendor')}>Vendor{sortIndicator('vendor')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('owner')}>Owner{sortIndicator('owner')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('lastUpdated')}>Last Updated{sortIndicator('lastUpdated')}</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredComponents.map((component) => {
+              {sortedComponents.map((component) => {
                 const Icon = componentIcons[component.type];
                 return (
                   <TableRow key={component.id}>
                     <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-primary/10 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="shrink-0">
+                          {component.status !== 'offline' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateComponent(component.id, { status: 'offline' })}
+                              className="border-destructive text-destructive hover:text-destructive"
+                              title="Mark as Down (offline)"
+                            >
+                              Mark as Down
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateComponent(component.id, { status: 'online' })}
+                              className="border-success text-success hover:text-success"
+                              title="Bring Online"
+                            >
+                              Mark as Online
+                            </Button>
+                          )}
+                        </div>
+                        <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                           <Icon className="w-4 h-4 text-primary" />
                         </div>
-                        <div>
-                          <div className="font-medium text-foreground">{component.name}</div>
-                          <div className="text-sm text-muted-foreground">{component.description}</div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground truncate">{component.name}</div>
+                          <div className="text-sm text-muted-foreground truncate">{component.description}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -212,6 +272,7 @@ export const ComponentsManagement = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{component.location}</TableCell>
+                    <TableCell className="text-muted-foreground">{component.vendor}</TableCell>
                     <TableCell className="text-muted-foreground">{component.owner}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(component.lastUpdated as any).toLocaleDateString()}

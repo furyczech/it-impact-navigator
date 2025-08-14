@@ -1,6 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useItiacStore } from "@/store/useItiacStore";
+import { AuditService } from "@/services/auditService";
+
 import { 
   Server, 
   Network, 
@@ -12,65 +15,109 @@ import {
   Zap
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Components",
-    value: "247",
-    icon: Server,
-    change: "+12 this month",
-    trend: "up"
-  },
-  {
-    title: "Active Dependencies",
-    value: "1,423",
-    icon: Network,
-    change: "Network health: 98%",
-    trend: "stable"
-  },
-  {
-    title: "Critical Paths",
-    value: "18",
-    icon: AlertTriangle,
-    change: "3 need attention",
-    trend: "warning"
-  },
-  {
-    title: "Business Processes",
-    value: "67",
-    icon: Users,
-    change: "5 high-impact",
-    trend: "stable"
-  }
-];
+type DashboardOverviewProps = {
+  onQuickNav?: (pageId: string) => void;
+};
 
-const recentAnalyses = [
-  {
-    id: 1,
-    component: "Database Cluster A",
-    impact: "High",
-    processes: 23,
-    timestamp: "2 hours ago",
-    status: "critical"
-  },
-  {
-    id: 2,
-    component: "API Gateway",
-    impact: "Medium",
-    processes: 12,
-    timestamp: "4 hours ago",
-    status: "warning"
-  },
-  {
-    id: 3,
-    component: "Load Balancer",
-    impact: "Low",
-    processes: 5,
-    timestamp: "6 hours ago",
-    status: "success"
-  }
-];
+export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
+  const components = useItiacStore((s) => s.components);
+  const dependencies = useItiacStore((s) => s.dependencies);
+  const workflows = useItiacStore((s) => s.workflows);
 
-export const DashboardOverview = () => {
+  const totalComponents = components.length;
+  const onlineCount = components.filter(c => c.status === 'online').length;
+  const warningCount = components.filter(c => c.status === 'warning').length;
+  const offlineCount = components.filter(c => c.status === 'offline').length;
+
+  const totalDependencies = dependencies.length;
+  const criticalPaths = dependencies.filter(d => d.criticality === 'critical').length;
+  const totalWorkflows = workflows.length;
+  const uniqueBusinessProcesses = Array.from(new Set(workflows.map(w => w.businessProcess))).length;
+
+  const networkHealth = totalComponents > 0 ? ((onlineCount / totalComponents) * 100) : 0;
+  const issuesCount = warningCount + offlineCount;
+  const riskLabel = issuesCount === 0 && criticalPaths === 0 ? 'Low' : (issuesCount > 3 || criticalPaths > 0 ? 'Elevated' : 'Moderate');
+
+  const stats = [
+    {
+      title: 'Total Components',
+      value: String(totalComponents),
+      icon: Server,
+      change: `${onlineCount}/${totalComponents} online`,
+      trend: onlineCount === totalComponents ? 'up' : (offlineCount > 0 ? 'warning' : 'stable'),
+      to: 'components'
+    },
+    {
+      title: 'Active Dependencies',
+      value: String(totalDependencies),
+      icon: Network,
+      change: `Network health: ${networkHealth.toFixed(1)}%`,
+      trend: networkHealth > 95 ? 'up' : (networkHealth < 80 ? 'warning' : 'stable'),
+      to: 'dependencies'
+    },
+    {
+      title: 'Critical Paths',
+      value: String(criticalPaths),
+      icon: AlertTriangle,
+      change: `${criticalPaths} critical`,
+      trend: criticalPaths > 0 ? 'warning' : 'stable',
+      to: 'dependencies'
+    },
+    {
+      title: 'Business Processes',
+      value: String(uniqueBusinessProcesses),
+      icon: Users,
+      change: `${totalWorkflows} workflows`,
+      trend: 'stable',
+      to: 'workflows'
+    }
+  ];
+
+  const timeAgo = (value: Date | string) => {
+    const dt = value instanceof Date ? value : new Date(value);
+    const diff = Date.now() - dt.getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  };
+
+  const workflowsUsingComponent = (componentId: string) =>
+    workflows.filter(w => w.steps.some(s =>
+      (s.primaryComponentIds && s.primaryComponentIds.includes(componentId)) ||
+      s.primaryComponentId === componentId ||
+      s.alternativeComponentIds?.includes(componentId)
+    )).length;
+
+  const recentAnalyses = components
+    .slice()
+    .sort((a, b) => new Date(b.lastUpdated as any).getTime() - new Date(a.lastUpdated as any).getTime())
+    .slice(0, 5)
+    .map((c) => ({
+      id: c.id,
+      component: c.name,
+      impact: c.status === 'offline' ? 'High' : c.status === 'warning' || c.status === 'maintenance' ? 'Medium' : 'Low',
+      processes: workflowsUsingComponent(c.id),
+      timestamp: timeAgo(c.lastUpdated as any),
+      status: c.status === 'offline' ? 'critical' : (c.status === 'warning' || c.status === 'maintenance') ? 'warning' : 'success'
+    }));
+
+  // Incident history from audit logs (status changes)
+  const incidentLogs = AuditService.getLogs(200, 'COMPONENT', 'UPDATE')
+    .filter(l => l.changes && l.changes.before && l.changes.after && l.changes.before.status !== l.changes.after.status)
+    .map(l => ({
+      id: l.id,
+      component: l.entityName || l.entityId || 'Unknown',
+      from: l.changes!.before.status,
+      to: l.changes!.after.status,
+      at: l.timestamp
+    }))
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .slice(0, 10);
+
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
@@ -78,7 +125,11 @@ export const DashboardOverview = () => {
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.title} className="bg-card border-border shadow-depth">
+            <Card
+              key={stat.title}
+              className={`bg-card border-border shadow-depth ${onQuickNav ? 'cursor-pointer hover:bg-accent/40 transition-colors' : ''}`}
+              onClick={() => onQuickNav && stat.to && onQuickNav(stat.to)}
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -105,43 +156,45 @@ export const DashboardOverview = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Impact Analyses */}
+        {/* System Health Overview (moved up) */}
         <Card className="bg-card border-border shadow-depth">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <Shield className="w-5 h-5 text-primary" />
-              <span>Recent Impact Analyses</span>
+              <Activity className="w-5 h-5 text-primary" />
+              <span>System Health Overview</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentAnalyses.map((analysis) => (
-                <div key={analysis.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-foreground">{analysis.component}</span>
-                      <Badge 
-                        variant={analysis.status === 'critical' ? 'destructive' : 
-                                analysis.status === 'warning' ? 'secondary' : 'default'}
-                        className={analysis.status === 'warning' ? 'bg-warning text-warning-foreground' : ''}
-                      >
-                        {analysis.impact}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {analysis.processes} processes affected • {analysis.timestamp}
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    View
-                  </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-network rounded-full flex items-center justify-center">
+                  <Network className="w-10 h-10 text-primary-foreground" />
                 </div>
-              ))}
+                <h3 className="font-semibold text-foreground">Network Health</h3>
+                <p className="text-2xl font-bold text-success mt-1">{networkHealth.toFixed(1)}%</p>
+                <p className="text-sm text-muted-foreground">{criticalPaths === 0 ? 'All critical paths operational' : `${criticalPaths} critical paths`}</p>
+              </div>
+              <div className="text-center">
+                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
+                  <Server className="w-10 h-10 text-primary-foreground" />
+                </div>
+                <h3 className="font-semibold text-foreground">Component Status</h3>
+                <p className="text-2xl font-bold text-success mt-1">{onlineCount}/{totalComponents}</p>
+                <p className="text-sm text-muted-foreground">Components online</p>
+              </div>
+              <div className="text-center">
+                <div className="w-20 h-20 mx-auto mb-4 bg-warning/10 rounded-full flex items-center justify-center border border-warning/20">
+                  <AlertTriangle className="w-10 h-10 text-warning" />
+                </div>
+                <h3 className="font-semibold text-foreground">Risk Assessment</h3>
+                <p className="text-2xl font-bold text-warning mt-1">{riskLabel}</p>
+                <p className="text-sm text-muted-foreground">{issuesCount} potential issues detected</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
+        {/* Quick Actions (keep on right) */}
         <Card className="bg-card border-border shadow-depth">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -151,19 +204,19 @@ export const DashboardOverview = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <Button className="w-full justify-start h-12 bg-gradient-primary hover:opacity-90">
+              <Button className="w-full justify-start h-12 bg-gradient-primary hover:opacity-90" onClick={() => onQuickNav && onQuickNav('analysis')}>
                 <Shield className="w-5 h-5 mr-3" />
                 Run Impact Analysis
               </Button>
-              <Button variant="secondary" className="w-full justify-start h-12">
+              <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('components')}>
                 <Server className="w-5 h-5 mr-3" />
                 Add Component
               </Button>
-              <Button variant="secondary" className="w-full justify-start h-12">
+              <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('dependencies')}>
                 <Network className="w-5 h-5 mr-3" />
                 View Network Map
               </Button>
-              <Button variant="outline" className="w-full justify-start h-12">
+              <Button variant="outline" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('workflows')}>
                 <TrendingUp className="w-5 h-5 mr-3" />
                 Generate Report
               </Button>
@@ -172,41 +225,30 @@ export const DashboardOverview = () => {
         </Card>
       </div>
 
-      {/* System Health Overview */}
+      {/* Incident History */}
       <Card className="bg-card border-border shadow-depth">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Activity className="w-5 h-5 text-primary" />
-            <span>System Health Overview</span>
+            <AlertTriangle className="w-5 h-5 text-warning" />
+            <span>Incident History</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-network rounded-full flex items-center justify-center">
-                <Network className="w-10 h-10 text-primary-foreground" />
-              </div>
-              <h3 className="font-semibold text-foreground">Network Health</h3>
-              <p className="text-2xl font-bold text-success mt-1">98.7%</p>
-              <p className="text-sm text-muted-foreground">All critical paths operational</p>
+          {incidentLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent incidents.</p>
+          ) : (
+            <div className="space-y-2">
+              {incidentLogs.map(log => (
+                <div key={log.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="capitalize">{log.from} → {log.to}</Badge>
+                    <span className="font-medium text-foreground">{log.component}</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">{timeAgo(log.at)}</span>
+                </div>
+              ))}
             </div>
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
-                <Server className="w-10 h-10 text-primary-foreground" />
-              </div>
-              <h3 className="font-semibold text-foreground">Component Status</h3>
-              <p className="text-2xl font-bold text-success mt-1">244/247</p>
-              <p className="text-sm text-muted-foreground">Components online</p>
-            </div>
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-4 bg-warning/10 rounded-full flex items-center justify-center border border-warning/20">
-                <AlertTriangle className="w-10 h-10 text-warning" />
-              </div>
-              <h3 className="font-semibold text-foreground">Risk Assessment</h3>
-              <p className="text-2xl font-bold text-warning mt-1">Low</p>
-              <p className="text-sm text-muted-foreground">3 potential issues detected</p>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

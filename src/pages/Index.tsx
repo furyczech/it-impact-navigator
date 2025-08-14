@@ -22,7 +22,7 @@ const Index = () => {
   const renderContent = () => {
     switch (currentPage) {
       case "dashboard":
-        return <DashboardOverview />;
+        return <DashboardOverview onQuickNav={handleNavigation} />;
       case "components":
         return <ComponentsManagement />;
       case "dependencies":

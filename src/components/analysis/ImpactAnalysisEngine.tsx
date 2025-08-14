@@ -18,7 +18,10 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { AlertTriangle, TrendingUp, Shield, Activity, Play } from "lucide-react";
+import { AlertTriangle, TrendingUp, Shield, Activity, Download, FileText, Info } from "lucide-react";
+import { ExportService } from "@/services/exportService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ImpactAnalysisEngineProps {
   components: ITComponent[];
@@ -31,14 +34,46 @@ interface ImpactResult {
   componentName: string;
   directImpacts: string[];
   indirectImpacts: string[];
+  impactedComponentIds: string[];
+  impactedComponents: string[];
   affectedWorkflows: string[];
+  affectedSteps: {
+    workflowId: string;
+    workflowName: string;
+    stepId: string;
+    stepName: string;
+    reasonComponentIds: string[]; // components that caused the impact
+  }[];
   businessImpactScore: number;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: ImpactAnalysisEngineProps) => {
   const [selectedComponent, setSelectedComponent] = useState<string>("all");
-  const [analysisResults, setAnalysisResults] = useState<ImpactResult[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsFor, setDetailsFor] = useState<ImpactResult | null>(null);
+  
+  // Only analyze components that are NOT online
+  const nonOnlineComponents = useMemo(() => (
+    components.filter(c => c.status !== 'online')
+  ), [components]);
+  const nonOnlineIds = useMemo(() => new Set(nonOnlineComponents.map(c => c.id)), [nonOnlineComponents]);
+  const filteredDependencies = useMemo(() => (
+    dependencies.filter(dep => nonOnlineIds.has(dep.sourceId) && nonOnlineIds.has(dep.targetId))
+  ), [dependencies, nonOnlineIds]);
+  const affectedWorkflowsByNonOnline = useMemo(() => (
+    workflows.filter(w => 
+      w.steps.some(step => {
+        const primaries = new Set<string>([
+          ...(step.primaryComponentId ? [step.primaryComponentId] : []),
+          ...(step.primaryComponentIds || [])
+        ]);
+        if ([...primaries].some(id => nonOnlineIds.has(id))) return true;
+        if (step.alternativeComponentIds && step.alternativeComponentIds.some(id => nonOnlineIds.has(id))) return true;
+        return false;
+      })
+    )
+  ), [workflows, nonOnlineIds]);
 
   const analyzeImpact = (componentId: string): ImpactResult => {
     const component = components.find(c => c.id === componentId);
@@ -48,63 +83,114 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
         componentName: "Unknown",
         directImpacts: [],
         indirectImpacts: [],
+        impactedComponentIds: [],
+        impactedComponents: [],
         affectedWorkflows: [],
+        affectedSteps: [],
         businessImpactScore: 0,
         riskLevel: 'low'
       };
     }
 
-    // Find direct dependencies (components that depend on this one)
-    const directImpacts = dependencies
-      .filter(dep => dep.sourceId === componentId)
-      .map(dep => {
-        const targetComponent = components.find(c => c.id === dep.targetId);
-        return targetComponent?.name || "Unknown";
-      });
+    // Build adjacency for cascading impacts: sourceId -> [targetId]
+    const adj = new Map<string, string[]>();
+    dependencies.forEach(dep => {
+      if (!adj.has(dep.sourceId)) adj.set(dep.sourceId, []);
+      adj.get(dep.sourceId)!.push(dep.targetId);
+    });
 
-    // Find indirect dependencies (recursive search)
-    const indirectImpacts: string[] = [];
-    const visited = new Set<string>();
-    const findIndirectImpacts = (currentId: string, depth: number) => {
-      if (depth > 3 || visited.has(currentId)) return; // Prevent infinite loops and limit depth
-      visited.add(currentId);
-      
-      const nextDeps = dependencies.filter(dep => dep.sourceId === currentId);
-      nextDeps.forEach(dep => {
-        const targetComponent = components.find(c => c.id === dep.targetId);
-        if (targetComponent && !directImpacts.includes(targetComponent.name)) {
-          indirectImpacts.push(targetComponent.name);
-          findIndirectImpacts(dep.targetId, depth + 1);
+    // Compute reachability (BFS) and track depths
+    const visited = new Set<string>([componentId]);
+    const depth = new Map<string, number>();
+    depth.set(componentId, 0);
+    const queue: string[] = [];
+    for (const nid of (adj.get(componentId) || [])) {
+      visited.add(nid);
+      depth.set(nid, 1);
+      queue.push(nid);
+    }
+    while (queue.length) {
+      const cur = queue.shift()!;
+      const next = adj.get(cur) || [];
+      const nextDepth = (depth.get(cur) || 0) + 1;
+      for (const n of next) {
+        if (!visited.has(n)) {
+          visited.add(n);
+          depth.set(n, nextDepth);
+          queue.push(n);
         }
-      });
-    };
-    
-    directImpacts.forEach(() => findIndirectImpacts(componentId, 1));
+      }
+    }
 
-    // Find affected workflows
-    const affectedWorkflows = workflows
-      .filter(workflow => 
-        workflow.steps.some(step => 
-          step.primaryComponentId === componentId || 
-          step.alternativeComponentIds?.includes(componentId)
-        )
-      )
-      .map(workflow => workflow.name);
+    const directIds = new Set<string>((adj.get(componentId) || []));
+    const allImpactedIds = Array.from(visited).filter(id => id !== componentId);
+    const indirectIds = allImpactedIds.filter(id => !directIds.has(id));
 
-    // Calculate business impact score
-    const directImpactScore = directImpacts.length * 10;
-    const indirectImpactScore = indirectImpacts.length * 5;
-    const workflowImpactScore = affectedWorkflows.length * 15;
+    const idToName = (id: string) => components.find(c => c.id === id)?.name || 'Unknown';
+    const directImpacts = Array.from(directIds).map(idToName);
+    const indirectImpacts = Array.from(new Set(indirectIds)).map(idToName);
+    const impactedComponentIds = allImpactedIds;
+    const impactedComponents = allImpactedIds.map(idToName);
+
+    // Find affected workflows (if any step uses the failed or any impacted component)
+    const impactedSet = new Set<string>([componentId, ...allImpactedIds]);
+    const affectedSteps: ImpactResult['affectedSteps'] = [];
+    const affectedWorkflows = new Set<string>();
+    for (const workflow of workflows) {
+      for (const step of workflow.steps) {
+        const primaries = new Set<string>([
+          ...(step.primaryComponentId ? [step.primaryComponentId] : []),
+          ...(step.primaryComponentIds || [])
+        ]);
+        const candidateIds = new Set<string>([
+          ...primaries,
+          ...(step.alternativeComponentIds || [])
+        ]);
+        const reason = [...candidateIds].filter(id => impactedSet.has(id));
+        if (reason.length > 0) {
+          affectedWorkflows.add(workflow.name);
+          affectedSteps.push({
+            workflowId: workflow.id,
+            workflowName: workflow.name,
+            stepId: step.id,
+            stepName: step.name,
+            reasonComponentIds: reason,
+          });
+        }
+      }
+    }
+
+    // Calculate business impact score (heavier weights for more deps, workflows, and deeper chains)
+    const directCount = directImpacts.length;
+    const indirectCount = indirectImpacts.length;
+    const totalImpacted = impactedComponentIds.length;
+    const indirectDepths = indirectImpacts
+      .map(name => {
+        const id = impactedComponentIds.find(id => (components.find(c => c.id === id)?.name || 'Unknown') === name);
+        return id ? (depth.get(id) || 0) : 0;
+      })
+      .filter(d => d >= 2);
+    const avgIndirectDepth = indirectDepths.length ? (indirectDepths.reduce((a, b) => a + b, 0) / indirectDepths.length) : 0;
+    const maxDepth = Math.max(0, ...Array.from(depth.values()));
+
+    const directImpactScore = directCount * 12; // higher weight
+    const indirectImpactScore = indirectCount * 8; // higher than before
+    const workflowImpactScore = affectedWorkflows.size * 20; // higher weight for workflows
+    const stepImpactScore = affectedSteps.length * 5; // more impacted steps increases score
+    const chainSeverityScore = (avgIndirectDepth * 5) + (maxDepth * 3); // deeper chains are worse
+    const breadthSeverityScore = totalImpacted * 2; // broader blast radius is worse
+
     const criticalityMultiplier = component.criticality === 'critical' ? 2 : 
                                  component.criticality === 'high' ? 1.5 : 1;
-    
-    const businessImpactScore = Math.round((directImpactScore + indirectImpactScore + workflowImpactScore) * criticalityMultiplier);
+
+    const rawScore = directImpactScore + indirectImpactScore + workflowImpactScore + stepImpactScore + chainSeverityScore + breadthSeverityScore;
+    const businessImpactScore = Math.round(rawScore * criticalityMultiplier);
 
     // Determine risk level
     let riskLevel: 'low' | 'medium' | 'high' | 'critical';
-    if (businessImpactScore >= 100) riskLevel = 'critical';
-    else if (businessImpactScore >= 60) riskLevel = 'high';
-    else if (businessImpactScore >= 30) riskLevel = 'medium';
+    if (businessImpactScore >= 150) riskLevel = 'critical';
+    else if (businessImpactScore >= 90) riskLevel = 'high';
+    else if (businessImpactScore >= 45) riskLevel = 'medium';
     else riskLevel = 'low';
 
     return {
@@ -112,22 +198,34 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
       componentName: component.name,
       directImpacts,
       indirectImpacts,
-      affectedWorkflows,
+      impactedComponentIds,
+      impactedComponents,
+      affectedWorkflows: Array.from(affectedWorkflows),
+      affectedSteps,
       businessImpactScore,
       riskLevel
     };
   };
 
-  const runAnalysis = () => {
-    if (selectedComponent && selectedComponent !== "all") {
-      const result = analyzeImpact(selectedComponent);
-      setAnalysisResults([result]);
-    } else {
-      // Analyze all components
+  // Auto-computed results (no need to press Run)
+  const analysisResults = useMemo<ImpactResult[]>(() => {
+    if (selectedComponent === 'all-components') {
       const results = components.map(component => analyzeImpact(component.id));
-      setAnalysisResults(results.sort((a, b) => b.businessImpactScore - a.businessImpactScore));
+      return results.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
     }
-  };
+    if (selectedComponent && selectedComponent !== "all") {
+      const comp = components.find(c => c.id === selectedComponent);
+      if (comp && comp.status !== 'online') {
+        return [analyzeImpact(selectedComponent)];
+      }
+      return [];
+    } else {
+      const results = nonOnlineComponents.map(component => analyzeImpact(component.id));
+      return results.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
+    }
+  }, [selectedComponent, components, dependencies, workflows, nonOnlineComponents]);
+
+  // Removed manual run; results update automatically via useMemo
 
   const riskColorMap = {
     low: "default",
@@ -137,19 +235,18 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
   } as const;
 
   const criticalComponents = useMemo(() => 
-    components.filter(c => c.criticality === 'critical'), 
-    [components]
+    nonOnlineComponents.filter(c => c.criticality === 'critical'), 
+    [nonOnlineComponents]
   );
 
   const singlePointsOfFailure = useMemo(() => {
-    return components.filter(component => {
-      const incomingDeps = dependencies.filter(dep => dep.targetId === component.id);
-      const outgoingDeps = dependencies.filter(dep => dep.sourceId === component.id);
-      
-      // Component is SPOF if it has many outgoing dependencies but few alternatives
+    return nonOnlineComponents.filter(component => {
+      const incomingDeps = filteredDependencies.filter(dep => dep.targetId === component.id);
+      const outgoingDeps = filteredDependencies.filter(dep => dep.sourceId === component.id);
+      // Component is SPOF (within non-online subset) if it has many outgoing deps but few incoming (alternatives)
       return outgoingDeps.length > 2 && incomingDeps.length <= 1;
     });
-  }, [components, dependencies]);
+  }, [nonOnlineComponents, filteredDependencies]);
 
   return (
     <div className="space-y-6">
@@ -159,10 +256,26 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
           <h1 className="text-3xl font-bold text-foreground">Impact Analysis Engine</h1>
           <p className="text-muted-foreground mt-1">Analyze component failure impacts on business processes</p>
         </div>
-        <Button onClick={runAnalysis} className="bg-gradient-primary hover:opacity-90">
-          <Play className="w-4 h-4 mr-2" />
-          Run Analysis
-        </Button>
+        <div className="flex items-center gap-2">
+          {analysisResults.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => ExportService.exportImpactAnalysisResults(analysisResults)}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => ExportService.generatePDFReport(components, dependencies, workflows, analysisResults)}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Generate PDF
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Controls */}
@@ -172,11 +285,12 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
             <div className="flex-1 min-w-64">
               <Select value={selectedComponent} onValueChange={setSelectedComponent}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select component to analyze (leave empty for all)" />
+                  <SelectValue placeholder="Select component or All (Non-Online / All Components)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Components</SelectItem>
-                  {components.map(component => (
+                  <SelectItem value="all">All Non-Online</SelectItem>
+                  <SelectItem value="all-components">All Components</SelectItem>
+                  {nonOnlineComponents.map(component => (
                     <SelectItem key={component.id} value={component.id}>
                       {component.name} ({component.type})
                     </SelectItem>
@@ -197,7 +311,19 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Critical Components</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Critical Components
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Počet komponent s kritičností označenou jako "critical".</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">{criticalComponents.length}</p>
               </div>
             </div>
@@ -210,7 +336,19 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                 <Shield className="w-5 h-5 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Single Points of Failure</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Single Points of Failure
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých komponent (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
                 <p className="text-2xl font-bold text-foreground">{singlePointsOfFailure.length}</p>
               </div>
             </div>
@@ -223,8 +361,20 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                 <TrendingUp className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Dependencies</p>
-                <p className="text-2xl font-bold text-foreground">{dependencies.length}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Total Dependencies
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Celkový počet vazeb (hran) mezi komponentami v síti.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
+                <p className="text-2xl font-bold text-foreground">{filteredDependencies.length}</p>
               </div>
             </div>
           </CardContent>
@@ -236,8 +386,20 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                 <Activity className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Business Workflows</p>
-                <p className="text-2xl font-bold text-foreground">{workflows.length}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  Business Workflows
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Počet definovaných workflow (procesních kroků), které mohou být ovlivněny výpadky komponent.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </p>
+                <p className="text-2xl font-bold text-foreground">{affectedWorkflowsByNonOnline.length}</p>
               </div>
             </div>
           </CardContent>
@@ -258,9 +420,25 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
               <TableHeader>
                 <TableRow>
                   <TableHead>Component</TableHead>
-                  <TableHead>Business Impact Score</TableHead>
+                  <TableHead>
+                    <div className="flex items-center gap-1">
+                      Business Impact Score
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <div className="max-w-xs text-sm">
+                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené workflow, násobeno kritičností komponenty.
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </TableHead>
                   <TableHead>Risk Level</TableHead>
-                  <TableHead>Direct Impacts</TableHead>
+                  <TableHead>Impacted Components</TableHead>
                   <TableHead>Affected Workflows</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -280,16 +458,14 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        {result.directImpacts.slice(0, 3).map((impact, index) => (
-                          <Badge key={index} variant="outline" className="mr-1 text-xs">
+                      <div className="flex flex-wrap gap-1 max-w-[600px]">
+                        {result.impactedComponents.map((impact, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
                             {impact}
                           </Badge>
                         ))}
-                        {result.directImpacts.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{result.directImpacts.length - 3} more
-                          </Badge>
+                        {result.impactedComponents.length === 0 && (
+                          <span className="text-xs text-muted-foreground">None</span>
                         )}
                       </div>
                     </TableCell>
@@ -308,7 +484,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm">View Details</Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setDetailsFor(result); setDetailsOpen(true); }}>View Details</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -317,6 +493,60 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
           </CardContent>
         </Card>
       )}
+      {/* Details Dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Impact Details{detailsFor ? `: ${detailsFor.componentName}` : ''}</DialogTitle>
+          </DialogHeader>
+          {detailsFor && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Direct Impacts</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {detailsFor.directImpacts.length > 0 ? detailsFor.directImpacts.map((n, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">{n}</Badge>
+                  )) : <span className="text-xs text-muted-foreground">None</span>}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Indirect Impacts</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {detailsFor.indirectImpacts.length > 0 ? detailsFor.indirectImpacts.map((n, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">{n}</Badge>
+                  )) : <span className="text-xs text-muted-foreground">None</span>}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Affected Workflows</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {detailsFor.affectedWorkflows.length > 0 ? detailsFor.affectedWorkflows.map((w, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">{w}</Badge>
+                  )) : <span className="text-xs text-muted-foreground">None</span>}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Affected Workflow Steps</p>
+                {detailsFor.affectedSteps.length > 0 ? (
+                  <div className="mt-2 space-y-2 max-h-60 overflow-auto pr-1">
+                    {detailsFor.affectedSteps.map((s, idx) => (
+                      <div key={`${s.workflowId}-${s.stepId}-${idx}`} className="text-xs text-foreground">
+                        <span className="font-semibold">{s.workflowName}</span> → <span className="italic">{s.stepName}</span>
+                        <span className="ml-1 text-muted-foreground">(impacted by: {s.reasonComponentIds.map(id => components.find(c => c.id === id)?.name || id).join(', ')})</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">None</span>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="secondary" onClick={() => setDetailsOpen(false)}>Close</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

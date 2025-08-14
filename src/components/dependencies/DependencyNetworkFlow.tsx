@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -10,6 +10,7 @@ import {
   Connection,
   Edge,
   Node,
+  ReactFlowInstance,
   MarkerType,
 } from '@xyflow/react';
 import { ITComponent, ComponentDependency } from '@/types/itiac';
@@ -18,6 +19,17 @@ interface DependencyNetworkFlowProps {
   components: ITComponent[];
   dependencies: ComponentDependency[];
   onAddDependency: (sourceId: string, targetId: string) => void;
+  // New: controls
+  filters?: {
+    nodeTypes?: string[]; // ITComponent['type'][]
+    nodeCriticalities?: Array<'low'|'medium'|'high'|'critical'>;
+    edgeTypes?: string[]; // ComponentDependency['type'][]
+    edgeCriticalities?: Array<'low'|'medium'|'high'|'critical'>;
+  };
+  groupBy?: 'none' | 'type' | 'criticality';
+  layoutTrigger?: number; // increment to re-layout
+  fitViewTrigger?: number; // increment to fit view
+  fullscreen?: boolean; // adjust height if needed
 }
 
 const getComponentColor = (criticality: string) => {
@@ -40,37 +52,93 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export const DependencyNetworkFlow = ({ components, dependencies, onAddDependency }: DependencyNetworkFlowProps) => {
-  // Convert components to nodes
-  const initialNodes: Node[] = useMemo(() => 
-    components.map((component, index) => ({
-      id: component.id,
-      type: 'default',
-      position: { 
-        x: (index % 3) * 250 + 100, 
-        y: Math.floor(index / 3) * 150 + 50 
-      },
-      data: { 
-        label: (
-          <div className="text-center">
-            <div className="font-medium">{component.name}</div>
-            <div className="text-xs text-gray-500">{component.type}</div>
-          </div>
-        )
-      },
-      style: {
-        backgroundColor: getComponentColor(component.criticality),
-        color: 'white',
-        border: `2px solid ${getStatusColor(component.status)}`,
-        borderRadius: '8px',
-        padding: '10px',
-        minWidth: '150px',
-      },
-    })), [components]);
+export const DependencyNetworkFlow = ({ components, dependencies, onAddDependency, filters, groupBy = 'none', layoutTrigger = 0, fitViewTrigger = 0, fullscreen = false }: DependencyNetworkFlowProps) => {
+  const rfRef = useRef<ReactFlowInstance | null>(null);
+
+  // Apply filters
+  const filteredComponents = useMemo(() => {
+    let cs = components;
+    if (filters?.nodeTypes && filters.nodeTypes.length) {
+      cs = cs.filter(c => filters.nodeTypes!.includes(c.type as any));
+    }
+    if (filters?.nodeCriticalities && filters.nodeCriticalities.length) {
+      cs = cs.filter(c => filters.nodeCriticalities!.includes(c.criticality));
+    }
+    return cs;
+  }, [components, filters]);
+
+  const filteredDependencies = useMemo(() => {
+    let ds = dependencies;
+    if (filters?.edgeTypes && filters.edgeTypes.length) {
+      ds = ds.filter(d => filters.edgeTypes!.includes(d.type as any));
+    }
+    if (filters?.edgeCriticalities && filters.edgeCriticalities.length) {
+      ds = ds.filter(d => filters.edgeCriticalities!.includes(d.criticality));
+    }
+    // also only keep edges connecting visible nodes
+    const visibleIds = new Set(filteredComponents.map(c => c.id));
+    ds = ds.filter(d => visibleIds.has(d.sourceId) && visibleIds.has(d.targetId));
+    return ds;
+  }, [dependencies, filters, filteredComponents]);
+
+  // Compute positions: grouped grid by groupBy
+  const computePosition = (index: number, col: number, row: number) => ({
+    x: col * 280 + 100,
+    y: row * 170 + 50,
+  });
+
+  const groupedNodes: Node[] = useMemo(() => {
+    const groups: Record<string, ITComponent[]> = {};
+    if (groupBy === 'type') {
+      filteredComponents.forEach(c => {
+        const k = String(c.type);
+        (groups[k] ||= []).push(c);
+      });
+    } else if (groupBy === 'criticality') {
+      filteredComponents.forEach(c => {
+        const k = c.criticality;
+        (groups[k] ||= []).push(c);
+      });
+    } else {
+      groups['all'] = filteredComponents.slice();
+    }
+
+    const groupKeys = Object.keys(groups);
+    const nodes: Node[] = [];
+    groupKeys.forEach((gk, colIdx) => {
+      const list = groups[gk];
+      list.forEach((component, rowIdx) => {
+        nodes.push({
+          id: component.id,
+          type: 'default',
+          position: computePosition(nodes.length, colIdx, rowIdx),
+          data: {
+            label: (
+              <div className="text-center">
+                <div className="font-medium">{component.name}</div>
+                <div className="text-xs text-gray-200/90">{component.type}</div>
+              </div>
+            )
+          },
+          style: {
+            backgroundColor: getComponentColor(component.criticality),
+            color: 'white',
+            border: `2px solid ${getStatusColor(component.status)}`,
+            borderRadius: '10px',
+            padding: '12px',
+            minWidth: '190px',
+            fontSize: '13px',
+          },
+        });
+      });
+    });
+    return nodes;
+  }, [filteredComponents, groupBy]);
+  const initialNodes: Node[] = groupedNodes;
 
   // Convert dependencies to edges
   const initialEdges: Edge[] = useMemo(() => 
-    dependencies.map((dep) => ({
+    filteredDependencies.map((dep) => ({
       id: dep.id,
       source: dep.sourceId,
       target: dep.targetId,
@@ -86,10 +154,13 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
       },
       label: dep.type,
       labelStyle: { 
-        fontSize: '12px',
-        fontWeight: 'bold',
+        fontSize: '13px',
+        fontWeight: '600',
+        background: 'rgba(255,255,255,0.6)',
+        padding: 2,
+        borderRadius: 4,
       },
-    })), [dependencies]);
+    })), [filteredDependencies]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -115,21 +186,51 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
     [setEdges, onAddDependency],
   );
 
+  // Re-layout when trigger or grouping/filters change
+  useEffect(() => {
+    setNodes(initialNodes);
+    const id = setTimeout(() => {
+      try { rfRef.current?.fitView({ padding: 0.2 }); } catch {}
+    }, 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutTrigger, groupBy, filteredComponents.length]);
+
+  // Update edges when filters change
+  useEffect(() => {
+    setEdges(initialEdges);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredDependencies.length]);
+
+  // Fit view on demand
+  useEffect(() => {
+    try { rfRef.current?.fitView({ padding: 0.2 }); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitViewTrigger]);
+
   return (
-    <div className="h-96 bg-background">
+    <div className={`bg-background rounded-lg border border-border ${fullscreen ? 'h-[90vh]' : 'h-[72vh] md:h-[80vh]'}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onInit={(instance) => { rfRef.current = instance; }}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={2}
+        zoomOnScroll
+        zoomOnPinch
+        panOnDrag
+        attributionPosition="bottom-left"
         snapToGrid
         snapGrid={[15, 15]}
-        attributionPosition="bottom-left"
+        proOptions={{ hideAttribution: false }}
       >
         <Background color="#aaa" gap={16} />
-        <Controls />
+        <Controls position="bottom-right" showInteractive={true} />
         <MiniMap 
           nodeColor={(node) => {
             const component = components.find(c => c.id === node.id);

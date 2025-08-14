@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ITComponent } from "@/types/itiac";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,8 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
     criticality: component?.criticality || "medium",
     description: component?.description || "",
     location: component?.location || "",
-    owner: component?.owner || ""
+    owner: component?.owner || "",
+    vendor: component?.vendor || ""
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -51,6 +52,37 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
     return Object.keys(newErrors).length === 0;
   };
 
+  // Prefill form on edit open, reset on create
+  useEffect(() => {
+    if (isOpen) {
+      if (isEdit && component) {
+        setFormData({
+          name: component.name || "",
+          type: component.type || "",
+          status: component.status || "online",
+          criticality: component.criticality || "medium",
+          description: component.description || "",
+          location: component.location || "",
+          owner: component.owner || "",
+          vendor: component.vendor || "",
+        });
+        setErrors({});
+      } else if (!isEdit) {
+        setFormData({
+          name: "",
+          type: "",
+          status: "online",
+          criticality: "medium",
+          description: "",
+          location: "",
+          owner: "",
+          vendor: "",
+        });
+        setErrors({});
+      }
+    }
+  }, [isOpen, isEdit, component]);
+
   const handleSubmit = () => {
     if (!validateForm()) return;
 
@@ -63,6 +95,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
       description: formData.description.trim(),
       location: formData.location.trim(),
       owner: formData.owner.trim(),
+      vendor: formData.vendor.trim() || undefined,
       lastUpdated: new Date(),
       metadata: component?.metadata || {}
     };
@@ -78,7 +111,8 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
         criticality: "medium",
         description: "",
         location: "",
-        owner: ""
+        owner: "",
+        vendor: ""
       });
     }
   };
@@ -119,8 +153,6 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
               <SelectContent>
                 <SelectItem value="server">Server</SelectItem>
                 <SelectItem value="database">Database</SelectItem>
-                <SelectItem value="api">API</SelectItem>
-                <SelectItem value="load-balancer">Load Balancer</SelectItem>
                 <SelectItem value="network">Network</SelectItem>
                 <SelectItem value="application">Application</SelectItem>
                 <SelectItem value="service">Service</SelectItem>
@@ -177,6 +209,16 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
               value={formData.owner}
               onChange={(e) => handleChange("owner", e.target.value)}
               placeholder="e.g., IT Team"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="vendor">Vendor</Label>
+            <Input
+              id="vendor"
+              value={formData.vendor}
+              onChange={(e) => handleChange("vendor", e.target.value)}
+              placeholder="e.g., Acme Corp"
             />
           </div>
 

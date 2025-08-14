@@ -1,0 +1,316 @@
+{
+  "components": [
+    {
+      "id": "1755174536455",
+      "name": "Matching",
+      "type": "application",
+      "status": "online",
+      "criticality": "medium",
+      "description": "Matching Platform IDB",
+      "location": "AWS",
+      "owner": "IT + IDB desk",
+      "vendor": "NotNull Makers",
+      "lastUpdated": "2025-08-14T13:44:01.979Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755174592437",
+      "name": "Bloomberg Anywhere",
+      "type": "service",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Aplikace Bloomberg Anywhere - chat + trading data",
+      "location": "Cloud",
+      "owner": "IDB",
+      "vendor": "Bloomberg",
+      "lastUpdated": "2025-08-14T13:44:01.715Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755174685980",
+      "name": "LSEG Workspace",
+      "type": "service",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Aplikace LSEG Workspace - chat + trading data",
+      "location": "Cloud",
+      "owner": "IDB",
+      "vendor": "LSEG",
+      "lastUpdated": "2025-08-14T13:44:01.357Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755174780001",
+      "name": "OpenScape Xpert (Turret)",
+      "type": "service",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Turrety na komunikaci mezi brokery a tradery",
+      "location": "Kanceláře 42FS + homeoffice",
+      "owner": "IDB + Energy",
+      "vendor": "iXperta",
+      "lastUpdated": "2025-08-14T13:44:00.799Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755174878123",
+      "name": "CTS42 CRM",
+      "type": "application",
+      "status": "online",
+      "criticality": "critical",
+      "description": "CRM modul aplikace CTS42",
+      "location": "CTS42",
+      "owner": "IT + Backoffice + Midoffice",
+      "vendor": "CTS TradeIT",
+      "lastUpdated": "2025-08-14T12:40:52.323Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755174959704",
+      "name": "CTS42 Frontoffice IDB web",
+      "type": "application",
+      "status": "online",
+      "criticality": "critical",
+      "description": "IDB modul aplikace CTS42",
+      "location": "CTS42",
+      "owner": "IDB",
+      "vendor": "CTS TradeIT",
+      "lastUpdated": "2025-08-14T12:35:59.704Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755175241241",
+      "name": "CTS42 Backoffice web",
+      "type": "application",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Backoffice modul aplikace CTS42",
+      "location": "CTS42",
+      "owner": "Backoffice",
+      "vendor": "CTS TradeIT",
+      "lastUpdated": "2025-08-14T12:40:41.241Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755175314836",
+      "name": "ANNA - ISIN",
+      "type": "service",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Databáze ISIN kódů cenných papírů.",
+      "location": "Cloud",
+      "owner": "Backoffice",
+      "vendor": "DSB - Derivatives Service Bureau",
+      "lastUpdated": "2025-08-14T12:41:54.836Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755175364256",
+      "name": "Markitwire",
+      "type": "service",
+      "status": "online",
+      "criticality": "critical",
+      "description": "Platforma pro potvrzování obchodů.",
+      "location": "Cloud",
+      "owner": "Backoffice",
+      "vendor": "IHS Markit",
+      "lastUpdated": "2025-08-14T14:05:27.405Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755175408652",
+      "name": "CTS42 Reporting",
+      "type": "application",
+      "status": "online",
+      "criticality": "high",
+      "description": "Reporting modul aplikace CTS42",
+      "location": "CTS42",
+      "owner": "IT + Reporting",
+      "vendor": "CTS TradeIT",
+      "lastUpdated": "2025-08-14T14:21:35.068Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755175825189",
+      "name": "CTS42",
+      "type": "application",
+      "status": "offline",
+      "criticality": "critical",
+      "description": "Aplikace 42FS",
+      "location": "Virtuální server",
+      "owner": "IT",
+      "vendor": "CTS TradeIT",
+      "lastUpdated": "2025-08-14T14:22:41.562Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755180931837",
+      "name": "ANYGW",
+      "type": "server",
+      "status": "offline",
+      "criticality": "critical",
+      "description": "Produkční prostředí CTS",
+      "location": "Serverovna",
+      "owner": "IT + Totalservice",
+      "vendor": "Totalservice",
+      "lastUpdated": "2025-08-14T14:22:30.308Z",
+      "metadata": {}
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "1755180769606",
+      "sourceId": "1755175825189",
+      "targetId": "1755174878123",
+      "type": "uses",
+      "criticality": "critical"
+    },
+    {
+      "id": "1755180786056",
+      "sourceId": "1755175825189",
+      "targetId": "1755174959704",
+      "type": "uses",
+      "criticality": "critical"
+    },
+    {
+      "id": "1755180797209",
+      "sourceId": "1755175825189",
+      "targetId": "1755175241241",
+      "type": "uses",
+      "criticality": "critical"
+    },
+    {
+      "id": "1755180819425",
+      "sourceId": "1755175825189",
+      "targetId": "1755175408652",
+      "type": "uses",
+      "criticality": "critical"
+    },
+    {
+      "id": "1755180952466",
+      "sourceId": "1755180931837",
+      "targetId": "1755175825189",
+      "type": "requires",
+      "criticality": "critical"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "1755179854511",
+      "name": "Zprostředkování IRS",
+      "description": "Proces zprostředkování IRS od objednávky po confirmaci ticketu.",
+      "businessProcess": "Zprostředkování IRS",
+      "criticality": "critical",
+      "owner": "IDB desk",
+      "lastUpdated": "2025-08-14T13:57:34.511Z",
+      "steps": [
+        {
+          "id": "1755179633655",
+          "name": "Sledovat a analyzovat trh",
+          "description": "",
+          "primaryComponentId": "1755174592437",
+          "alternativeComponentIds": [
+            "1755174685980",
+            "1755174536455",
+            "1755174780001"
+          ],
+          "order": 1
+        },
+        {
+          "id": "1755179667662",
+          "name": "Přijmout objednávku od klienta",
+          "description": "",
+          "primaryComponentId": "1755174780001",
+          "alternativeComponentIds": [
+            "1755174592437",
+            "1755174685980",
+            "1755174536455"
+          ],
+          "order": 2
+        },
+        {
+          "id": "1755179694605",
+          "name": "Nabídnout cenu dalšímu klientovi",
+          "description": "",
+          "primaryComponentId": "1755174780001",
+          "alternativeComponentIds": [
+            "1755174592437",
+            "1755174536455",
+            "1755174685980"
+          ],
+          "order": 3
+        },
+        {
+          "id": "1755179725520",
+          "name": "Potvrzení obchodu",
+          "description": "",
+          "primaryComponentId": "1755174780001",
+          "alternativeComponentIds": [
+            "1755174536455",
+            "1755174592437",
+            "1755174685980"
+          ],
+          "order": 4
+        },
+        {
+          "id": "1755179739984",
+          "name": "Kontrola onboardingu klienta",
+          "description": "",
+          "primaryComponentId": "1755174878123",
+          "alternativeComponentIds": [],
+          "order": 5
+        },
+        {
+          "id": "1755179766149",
+          "name": "Vytvoření lvl 1 ticketu",
+          "description": "",
+          "primaryComponentId": "1755174959704",
+          "alternativeComponentIds": [],
+          "order": 6
+        },
+        {
+          "id": "1755179783890",
+          "name": "Kompletace ticketu na lvl 2",
+          "description": "",
+          "primaryComponentId": "1755175241241",
+          "alternativeComponentIds": [],
+          "order": 7
+        },
+        {
+          "id": "1755179801987",
+          "name": "Kalkulace brockerage",
+          "description": "",
+          "primaryComponentId": "1755175241241",
+          "alternativeComponentIds": [],
+          "order": 8
+        },
+        {
+          "id": "1755179816679",
+          "name": "Vygenerování ISIN",
+          "description": "",
+          "primaryComponentId": "1755175314836",
+          "alternativeComponentIds": [
+            "1755175241241"
+          ],
+          "order": 9
+        },
+        {
+          "id": "1755179837255",
+          "name": "Poslání confirmací",
+          "description": "",
+          "primaryComponentId": "1755175364256",
+          "alternativeComponentIds": [],
+          "order": 10
+        },
+        {
+          "id": "1755179853115",
+          "name": "Reportovat obchod",
+          "description": "",
+          "primaryComponentId": "1755175408652",
+          "alternativeComponentIds": [],
+          "order": 11
+        }
+      ]
+    }
+  ]
+}

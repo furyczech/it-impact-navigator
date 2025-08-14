@@ -29,7 +29,7 @@ export class ExportService {
   }
 
   static exportComponentsToCSV(components: ITComponent[]) {
-    const headers = ['ID', 'Name', 'Type', 'Status', 'Criticality', 'Description', 'Location', 'Owner', 'Last Updated'];
+    const headers = ['ID', 'Name', 'Type', 'Status', 'Criticality', 'Description', 'Location', 'Owner', 'Vendor', 'Last Updated'];
     const data = components.map(comp => ({
       'ID': comp.id,
       'Name': comp.name,
@@ -39,6 +39,7 @@ export class ExportService {
       'Description': comp.description || '',
       'Location': comp.location || '',
       'Owner': comp.owner || '',
+      'Vendor': comp.vendor || '',
       'Last Updated': comp.lastUpdated.toISOString()
     }));
 
@@ -263,6 +264,9 @@ export class ExportService {
       .filter(line => line.trim())
       .map((line, index) => {
         const values = this.parseCSVLine(line);
+        // Support both old and new header layouts (without/with Vendor)
+        const vendorIndex = headers.includes('Vendor') ? headers.indexOf('Vendor') : -1;
+        const lastUpdatedIndex = headers.indexOf('Last Updated');
         const component: ITComponent = {
           id: values[0] || `imported-${Date.now()}-${index}`,
           name: values[1] || `Component ${index + 1}`,
@@ -272,7 +276,8 @@ export class ExportService {
           description: values[5] || '',
           location: values[6] || '',
           owner: values[7] || '',
-          lastUpdated: values[8] ? new Date(values[8]) : new Date()
+          vendor: vendorIndex >= 0 ? (values[vendorIndex] || '') : undefined,
+          lastUpdated: lastUpdatedIndex >= 0 && values[lastUpdatedIndex] ? new Date(values[lastUpdatedIndex]) : new Date()
         };
         return component;
       });
