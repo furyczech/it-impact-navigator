@@ -1,6 +1,19 @@
 import { supabase } from '@/lib/supabase';
 import type { ITWorkflow, WorkflowStep } from '@/types/itiac';
 
+// Helper function to format date with hours, minutes, and seconds
+const formatDate = (date: Date = new Date()): string => {
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 // Workflow operations
 export const fetchWorkflows = async (): Promise<ITWorkflow[]> => {
   const { data, error } = await supabase
@@ -12,15 +25,28 @@ export const fetchWorkflows = async (): Promise<ITWorkflow[]> => {
   return data || [];
 };
 
-export const createWorkflow = async (workflow: Omit<ITWorkflow, 'id'>): Promise<ITWorkflow> => {
+export const createWorkflow = async (workflow: Omit<ITWorkflow, 'id' | 'lastUpdated'>): Promise<ITWorkflow> => {
+  const now = formatDate();
+  const workflowWithTimestamps = {
+    ...workflow,
+    last_updated: now,
+    created_at: now,
+    updated_at: now
+  };
+  
   const { data, error } = await supabase
     .from('workflows')
-    .insert([workflow])
+    .insert([workflowWithTimestamps])
     .select()
     .single();
   
   if (error) throw error;
-  return data;
+  
+  // Map database fields to frontend model
+  return {
+    ...data,
+    lastUpdated: new Date(data.last_updated)
+  };
 };
 
 export const updateWorkflow = async (id: string, updates: Partial<ITWorkflow>): Promise<ITWorkflow> => {
