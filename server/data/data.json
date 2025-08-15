@@ -140,7 +140,7 @@
       "location": "Virtuální server",
       "owner": "IT",
       "vendor": "CTS TradeIT",
-      "lastUpdated": "2025-08-14T14:22:41.562Z",
+      "lastUpdated": "2025-08-14T15:09:02.406Z",
       "metadata": {}
     },
     {
@@ -153,7 +153,19 @@
       "location": "Serverovna",
       "owner": "IT + Totalservice",
       "vendor": "Totalservice",
-      "lastUpdated": "2025-08-14T14:22:30.308Z",
+      "lastUpdated": "2025-08-14T15:09:01.678Z",
+      "metadata": {}
+    },
+    {
+      "id": "1755186334142",
+      "name": "testsdasdasdasd",
+      "type": "database",
+      "status": "online",
+      "criticality": "medium",
+      "description": "",
+      "location": "",
+      "owner": "",
+      "lastUpdated": "2025-08-14T15:45:34.142Z",
       "metadata": {}
     }
   ],
