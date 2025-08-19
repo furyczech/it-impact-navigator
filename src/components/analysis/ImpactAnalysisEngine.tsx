@@ -254,7 +254,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Impact Analysis Engine</h1>
-          <p className="text-muted-foreground mt-1">Analyze component failure impacts on business processes</p>
+          <p className="text-muted-foreground mt-1">Analyze IT asset failure impacts on business processes</p>
         </div>
         <div className="flex items-center gap-2">
           {analysisResults.length > 0 && (
@@ -285,11 +285,11 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
             <div className="flex-1 min-w-64">
               <Select value={selectedComponent} onValueChange={setSelectedComponent}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select component or All (Non-Online / All Components)" />
+                  <SelectValue placeholder="Select IT asset or All (Non-Online / All IT Assets)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Non-Online</SelectItem>
-                  <SelectItem value="all-components">All Components</SelectItem>
+                  <SelectItem value="all-components">All IT Assets</SelectItem>
                   {nonOnlineComponents.map(component => (
                     <SelectItem key={component.id} value={component.id}>
                       {component.name} ({component.type})
@@ -312,14 +312,14 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
               </div>
               <div>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Critical Components
+                  Critical IT Assets
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Počet komponent s kritičností označenou jako "critical".</p>
+                        <p>Počet IT assetů s kritičností označenou jako "critical".</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -344,7 +344,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých komponent (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
+                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých IT assetů (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -369,7 +369,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Celkový počet vazeb (hran) mezi komponentami v síti.</p>
+                        <p>Celkový počet vazeb (hran) mezi IT assety v síti.</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -394,7 +394,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Počet definovaných workflow (procesních kroků), které mohou být ovlivněny výpadky komponent.</p>
+                        <p>Počet definovaných workflow (procesních kroků), které mohou být ovlivněny výpadky IT assetů.</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -419,7 +419,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Component</TableHead>
+                  <TableHead>IT Asset</TableHead>
                   <TableHead>
                     <div className="flex items-center gap-1">
                       Business Impact Score
@@ -430,7 +430,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                           </TooltipTrigger>
                           <TooltipContent>
                             <div className="max-w-xs text-sm">
-                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené workflow, násobeno kritičností komponenty.
+                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené workflow, násobeno kritičností IT assetu.
                             </div>
                           </TooltipContent>
                         </Tooltip>
@@ -438,7 +438,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                     </div>
                   </TableHead>
                   <TableHead>Risk Level</TableHead>
-                  <TableHead>Impacted Components</TableHead>
+                  <TableHead>Impacted IT Assets</TableHead>
                   <TableHead>Affected Workflows</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>

@@ -121,8 +121,9 @@ export const DependenciesVisualization = () => {
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Dependencies Visualization</h1>
-          <p className="text-muted-foreground mt-1">Visualize and manage component dependencies</p>
+          <p className="text-muted-foreground mt-1">Visualize and manage IT asset dependencies</p>
         </div>
+
         <div className="flex flex-wrap gap-2 md:justify-end">
           {/* Grouping */}
           <Select value={groupBy} onValueChange={(v: any) => { setGroupBy(v); setLayoutTrigger(x=>x+1); }}>
@@ -182,7 +183,7 @@ export const DependenciesVisualization = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Components</SelectItem>
+              <SelectItem value="all">All IT Assets</SelectItem>
               <SelectItem value="critical">Critical Only</SelectItem>
               <SelectItem value="offline">Issues Only</SelectItem>
             </SelectContent>
@@ -207,7 +208,7 @@ export const DependenciesVisualization = () => {
               <div className="space-y-4 pt-4">
                 <Select value={newDependency.sourceId} onValueChange={(value) => setNewDependency({...newDependency, sourceId: value})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select source component" />
+                    <SelectValue placeholder="Select source IT asset" />
                   </SelectTrigger>
                   <SelectContent>
                     {components.map(component => (
@@ -219,7 +220,7 @@ export const DependenciesVisualization = () => {
                 </Select>
                 <Select value={newDependency.targetId} onValueChange={(value) => setNewDependency({...newDependency, targetId: value})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select target component" />
+                    <SelectValue placeholder="Select target IT asset" />
                   </SelectTrigger>
                   <SelectContent>
                     {components.map(component => (
@@ -291,7 +292,7 @@ export const DependenciesVisualization = () => {
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Celkový počet vazeb (hran) mezi komponentami v síti.</p>
+                        <p>Celkový počet vazeb (hran) mezi IT assety v síti.</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -343,7 +344,7 @@ export const DependenciesVisualization = () => {
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých komponent (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
+                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých IT assetů (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -418,7 +419,7 @@ export const DependenciesVisualization = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <GitBranch className="w-5 h-5 text-primary" />
-              <span>Components</span>
+              <span>IT Assets</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

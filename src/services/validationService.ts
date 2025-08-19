@@ -10,7 +10,7 @@ export class ValidationService {
 
     // Check for self-loop
     if (newDependency.sourceId === newDependency.targetId) {
-      errors.push("A component cannot depend on itself");
+      errors.push("An IT asset cannot depend on itself");
     }
 
     // Check for duplicate dependency

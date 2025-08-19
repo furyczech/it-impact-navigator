@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Server, Database, Globe, Zap, Network, Code, Settings } from "lucide-react";
+import { Plus, Search, Server, Database, Globe, Zap, Network, Code, Settings, HardDrive, Plug, Cpu, Shield, Cloud, BadgeCheck, User, Archive, Puzzle } from "lucide-react";
 
 
 const componentIcons = {
@@ -39,8 +39,21 @@ const componentIcons = {
   'load-balancer': Zap,
   network: Network,
   application: Code,
-  service: Settings
-};
+  service: Settings,
+  storage: HardDrive,
+  endpoint: Plug,
+  'virtual-machine': Cpu,
+  firewall: Shield,
+  router: Network,
+  switch: Network,
+  'cloud-instance': Cloud,
+  license: BadgeCheck,
+  backup: Archive,
+  domain: Globe,
+  certificate: BadgeCheck,
+  'user-account': User,
+  modul: Puzzle
+} as const;
 
 const statusColors = {
   online: "default",
@@ -119,13 +132,13 @@ export const ComponentsManagement = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Components Management</h1>
-          <p className="text-muted-foreground mt-1">Manage IT components and their configurations</p>
+          <h1 className="text-3xl font-bold text-foreground">IT Assets Management</h1>
+          <p className="text-muted-foreground mt-1">Manage IT assets and their configurations</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={() => setIsDialogOpen(true)} className="bg-gradient-primary hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" />
-            Add Component
+            Add IT Asset
           </Button>
           <Button variant="outline" onClick={() => ExportService.exportFullBackup(components, dependencies, workflows)}>
             Export JSON
@@ -139,10 +152,33 @@ export const ComponentsManagement = () => {
             setEditingComponent(null);
           }}
           onSave={(component) => {
+            const { name, type, status, criticality, description, location, owner, vendor, metadata } = component;
             if (editingComponent) {
-              updateComponent(component.id, component);
+              // Pass only patchable fields (no id, no lastUpdated)
+              updateComponent(component.id, {
+                name,
+                type,
+                status,
+                criticality,
+                description,
+                location,
+                owner,
+                vendor,
+                metadata
+              });
             } else {
-              addComponent(component);
+              // Create with only allowed fields
+              addComponent({
+                name,
+                type,
+                status,
+                criticality,
+                description,
+                location,
+                owner,
+                vendor,
+                metadata: metadata || {}
+              });
             }
           }}
           component={editingComponent || undefined}
@@ -158,7 +194,7 @@ export const ComponentsManagement = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search components..."
+                  placeholder="Search IT assets..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -171,11 +207,25 @@ export const ComponentsManagement = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="api">API</SelectItem>
+                <SelectItem value="application">Application</SelectItem>
+                <SelectItem value="backup">Backup</SelectItem>
+                <SelectItem value="certificate">Certificate</SelectItem>
+                <SelectItem value="cloud-instance">Cloud Instance</SelectItem>
                 <SelectItem value="server">Server</SelectItem>
                 <SelectItem value="database">Database</SelectItem>
+                <SelectItem value="domain">Domain</SelectItem>
+                <SelectItem value="endpoint">Endpoint</SelectItem>
+                <SelectItem value="firewall">Firewall</SelectItem>
+                <SelectItem value="license">License</SelectItem>
                 <SelectItem value="network">Network</SelectItem>
-                <SelectItem value="application">Application</SelectItem>
+                <SelectItem value="router">Router</SelectItem>
+                <SelectItem value="storage">Storage</SelectItem>
+                <SelectItem value="switch">Switch</SelectItem>
                 <SelectItem value="service">Service</SelectItem>
+                <SelectItem value="user-account">User Account</SelectItem>
+                <SelectItem value="virtual-machine">Virtual Machine</SelectItem>
+                <SelectItem value="modul">Modul</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -194,19 +244,19 @@ export const ComponentsManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Components Table */}
+      {/* IT Assets Table */}
       <Card className="bg-card border-border shadow-depth">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Server className="w-5 h-5 text-primary" />
-            <span>Components ({filteredComponents.length})</span>
+            <span>IT Assets ({filteredComponents.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('name')}>Component{sortIndicator('name')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => headerSort('name')}>IT Asset{sortIndicator('name')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('type')}>Type{sortIndicator('type')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('status')}>Status{sortIndicator('status')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('criticality')}>Criticality{sortIndicator('criticality')}</TableHead>
@@ -225,27 +275,18 @@ export const ComponentsManagement = () => {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="shrink-0">
-                          {component.status !== 'offline' ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateComponent(component.id, { status: 'offline' })}
-                              className="border-destructive text-destructive hover:text-destructive"
-                              title="Mark as Down (offline)"
-                            >
-                              Mark as Down
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateComponent(component.id, { status: 'online' })}
-                              className="border-success text-success hover:text-success"
-                              title="Bring Online"
-                            >
-                              Mark as Online
-                            </Button>
-                          )}
+                          <label className="switch" title={component.status === 'offline' ? 'Bring Online' : 'Mark as Down (offline)'}>
+                            <input
+                              type="checkbox"
+                              checked={component.status !== 'offline'}
+                              onChange={(e) => {
+                                const makeOnline = e.target.checked;
+                                updateComponent(component.id, { status: makeOnline ? 'online' : 'offline' });
+                              }}
+                              aria-label={component.status === 'offline' ? 'Bring Online' : 'Mark as Down'}
+                            />
+                            <span className="slider"></span>
+                          </label>
                         </div>
                         <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                           <Icon className="w-4 h-4 text-primary" />

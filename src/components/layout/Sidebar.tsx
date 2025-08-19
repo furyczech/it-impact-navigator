@@ -16,7 +16,7 @@ import {
 
 const navigationItems = [
   { icon: BarChart3, label: "Dashboard", id: "dashboard" },
-  { icon: Server, label: "Components", id: "components" },
+  { icon: Server, label: "IT Assets", id: "components" },
   { icon: Network, label: "Dependencies", id: "dependencies" },
   { icon: GitBranch, label: "Workflows", id: "workflows" },
   { icon: Shield, label: "Impact Analysis", id: "analysis" },

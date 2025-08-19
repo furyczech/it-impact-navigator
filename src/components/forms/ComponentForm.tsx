@@ -128,7 +128,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Component" : "Add New Component"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit IT Asset" : "Add New IT Asset"}</DialogTitle>
         </DialogHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
@@ -138,7 +138,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
               id="name"
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              placeholder="Component name"
+              placeholder="IT Asset name"
               className={errors.name ? "border-destructive" : ""}
             />
             {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
@@ -151,11 +151,25 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="server">Server</SelectItem>
-                <SelectItem value="database">Database</SelectItem>
-                <SelectItem value="network">Network</SelectItem>
+                <SelectItem value="api">API</SelectItem>
                 <SelectItem value="application">Application</SelectItem>
+                <SelectItem value="backup">Backup</SelectItem>
+                <SelectItem value="certificate">Certificate</SelectItem>
+                <SelectItem value="cloud-instance">Cloud Instance</SelectItem>
+                <SelectItem value="database">Database</SelectItem>
+                <SelectItem value="domain">Domain</SelectItem>
+                <SelectItem value="endpoint">Endpoint</SelectItem>
+                <SelectItem value="firewall">Firewall</SelectItem>
+                <SelectItem value="license">License</SelectItem>
+                <SelectItem value="network">Network</SelectItem>
+                <SelectItem value="router">Router</SelectItem>
+                <SelectItem value="server">Server</SelectItem>
                 <SelectItem value="service">Service</SelectItem>
+                <SelectItem value="storage">Storage</SelectItem>
+                <SelectItem value="switch">Switch</SelectItem>
+                <SelectItem value="user-account">User Account</SelectItem>
+                <SelectItem value="virtual-machine">Virtual Machine</SelectItem>
+                <SelectItem value="modul">Modul</SelectItem>
               </SelectContent>
             </Select>
             {errors.type && <p className="text-sm text-destructive">{errors.type}</p>}
@@ -228,7 +242,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
               id="description"
               value={formData.description}
               onChange={(e) => handleChange("description", e.target.value)}
-              placeholder="Component description..."
+              placeholder="IT Asset description..."
               rows={3}
             />
           </div>
@@ -237,7 +251,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
         <div className="flex justify-end space-x-2 pt-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSubmit}>
-            {isEdit ? "Update Component" : "Create Component"}
+            {isEdit ? "Update IT Asset" : "Create IT Asset"}
           </Button>
         </div>
       </DialogContent>

@@ -63,7 +63,7 @@ export const WorkflowsManagement = () => {
   const getComponentName = (componentId?: string) => {
     if (!componentId) return "N/A";
     const component = components.find(c => c.id === componentId);
-    return component?.name || "Unknown Component";
+    return component?.name || "Unknown IT Asset";
   };
 
   const getWorkflowRisk = (workflow: BusinessWorkflow) => {
@@ -187,7 +187,7 @@ export const WorkflowsManagement = () => {
                       </TooltipTrigger>
                       <TooltipContent>
                         <div className="max-w-xs text-sm">
-                          Workflow s nízkým rizikem podle aktuální kritičnosti jejich klíčových komponent.
+                          Workflow s nízkým rizikem podle aktuální kritičnosti jejich klíčových IT assetů.
                         </div>
                       </TooltipContent>
                     </Tooltip>

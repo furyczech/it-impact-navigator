@@ -86,8 +86,6 @@ export const createComponent = async (component: Omit<ITComponent, 'id' | 'lastU
     updated_at: component.updated_at || now
   };
   
-  console.log('Creating component with data:', componentWithId);
-  
   const { data, error } = await supabase
     .from('components')
     .insert([componentWithId])

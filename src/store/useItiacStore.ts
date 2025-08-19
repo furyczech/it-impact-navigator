@@ -13,8 +13,14 @@ import {
   updateDependency as updateDependencyApi, 
   deleteDependency as deleteDependencyApi
 } from '@/services/dependencyService';
+import { 
+  fetchWorkflows as fetchWorkflowsApi, 
+  createWorkflow as createWorkflowApi, 
+  updateWorkflow as updateWorkflowApi, 
+  deleteWorkflow as deleteWorkflowApi,
+  fetchWorkflowSteps as fetchWorkflowStepsApi
+} from '@/services/workflowService';
 import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
 
 // Helper function to ensure date is in the correct format
 const ensureDate = (date: Date | string | undefined): Date => {
@@ -32,17 +38,17 @@ interface ItiacState {
   addComponent: (component: Omit<ITComponent, 'id' | 'lastUpdated'>) => Promise<ITComponent>;
   updateComponent: (id: string, patch: Partial<Omit<ITComponent, 'id' | 'lastUpdated'>>) => Promise<ITComponent | undefined>;
   deleteComponent: (id: string) => Promise<void>;
-  addDependency: (dependency: Omit<ComponentDependency, 'id' | 'lastUpdated'>) => Promise<ComponentDependency>;
-  updateDependency: (id: string, patch: Partial<Omit<ComponentDependency, 'id' | 'lastUpdated'>>) => Promise<ComponentDependency | undefined>;
+  addDependency: (dependency: Omit<ComponentDependency, 'id'>) => Promise<ComponentDependency>;
+  updateDependency: (id: string, patch: Partial<Omit<ComponentDependency, 'id'>>) => Promise<ComponentDependency | undefined>;
   deleteDependency: (id: string) => Promise<void>;
   // workflow actions
-  addWorkflow: (workflow: Omit<BusinessWorkflow, 'id' | 'lastUpdated' | 'steps'> & { steps?: WorkflowStep[] }) => BusinessWorkflow;
-  updateWorkflow: (id: string, patch: Partial<Omit<BusinessWorkflow, 'id' | 'lastUpdated'>>) => BusinessWorkflow | undefined;
-  deleteWorkflow: (id: string) => void;
+  addWorkflow: (workflow: Omit<BusinessWorkflow, 'id' | 'lastUpdated' | 'steps'> & { steps?: WorkflowStep[] }) => Promise<BusinessWorkflow>;
+  updateWorkflow: (id: string, patch: Partial<Omit<BusinessWorkflow, 'id' | 'lastUpdated'>>) => Promise<BusinessWorkflow | undefined>;
+  deleteWorkflow: (id: string) => Promise<void>;
   // bulk operations
   importData: (data: { components?: any[]; dependencies?: any[] }) => Promise<void>;
   resetAllData: () => Promise<void>;
-  loadData: () => Promise<{ components: ITComponent[]; dependencies: ComponentDependency[] }>;
+  loadData: () => Promise<{ components: ITComponent[]; dependencies: ComponentDependency[]; workflows: BusinessWorkflow[] }>;
 }
 
 // Initial empty state
@@ -60,27 +66,53 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
   loadData: async () => {
     try {
       set({ isLoading: true, error: null });
-      const [components, dependencies] = await Promise.all([
+      const [wfRes, compRes, depRes] = await Promise.allSettled([
+        fetchWorkflowsApi(),
         fetchComponents(),
         fetchDependencies()
       ]);
+      const workflows = wfRes.status === 'fulfilled' ? (wfRes.value || []) : [];
+      const components = compRes.status === 'fulfilled' ? (compRes.value || []) : [];
+      const dependencies = depRes.status === 'fulfilled' ? (depRes.value || []) : [];
+      if (wfRes.status === 'rejected') console.warn('Workflows load failed, continuing without workflows:', wfRes.reason);
+      if (compRes.status === 'rejected') console.warn('Components load failed:', compRes.reason);
+      if (depRes.status === 'rejected') console.warn('Dependencies load failed:', depRes.reason);
       
-      // Ensure dates are properly converted to Date objects
-      const normalizedComponents = components.map(comp => ({
+      // Enrich workflows with steps
+      const workflowsWithSteps: BusinessWorkflow[] = await Promise.all(
+        (workflows || []).map(async (wf) => {
+          try {
+            const steps = await fetchWorkflowStepsApi(wf.id);
+            return { ...wf, steps };
+          } catch (e) {
+            console.warn('Failed to load steps for workflow', wf.id, e);
+            return { ...wf, steps: [] };
+          }
+        })
+      );
+
+      // Normalize dates
+      const normalizedComponents = (components || []).map(comp => ({
         ...comp,
         lastUpdated: ensureDate(comp.lastUpdated)
       }));
-      
-      const normalizedDependencies = dependencies.map(dep => ({
+      const normalizedDependencies = (dependencies || []).map(dep => ({
         ...dep,
-        lastUpdated: ensureDate(dep.lastUpdated as any)
+        lastUpdated: ensureDate((dep as any).lastUpdated)
+      }));
+      const normalizedWorkflows = (workflowsWithSteps || []).map(wf => ({
+        ...wf,
+        lastUpdated: ensureDate(wf.lastUpdated)
       }));
       
       set({ 
         components: normalizedComponents, 
         dependencies: normalizedDependencies,
+        workflows: normalizedWorkflows,
         isLoading: false 
       });
+
+      return { components: normalizedComponents, dependencies: normalizedDependencies, workflows: normalizedWorkflows };
     } catch (error) {
       console.error('Failed to load data:', error);
       set({ error: 'Failed to load data', isLoading: false });
@@ -107,7 +139,7 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
         // Let the service handle the timestamps
       };
       
-      console.log('Creating component with data:', dbComponent);
+      
       
       // Call the API to create the component
       const newComponent = await createComponentApi(dbComponent);
@@ -117,29 +149,16 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
       }
       
       // Map the database response back to the frontend model
-      const mappedComponent: ITComponent = {
-        id: newComponent.id,
-        name: newComponent.name,
-        type: newComponent.type,
-        status: newComponent.status,
-        criticality: newComponent.criticality,
-        description: newComponent.description,
-        location: newComponent.location,
-        owner: newComponent.owner,
-        vendor: newComponent.vendor,
-        lastUpdated: new Date(newComponent.last_updated),
-        metadata: newComponent.metadata || {}
-      };
-      
-      AuditService.logComponentAction('CREATE', mappedComponent);
+      // The service already returns ITComponent with lastUpdated
+      AuditService.logComponentAction('CREATE', newComponent);
       
       set((state) => ({
-        components: [...state.components, mappedComponent],
+        components: [...state.components, newComponent],
         isLoading: false
       }));
       
       toast.success('Component created successfully');
-      return mappedComponent;
+      return newComponent;
     } catch (error) {
       console.error('Failed to create component:', error);
       set({ error: 'Failed to create component', isLoading: false });
@@ -170,30 +189,16 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
       
       const updatedComponent = await updateComponentApi(id, updateData);
       
-      // Map database response to frontend model
-      const mappedComponent: ITComponent = {
-        id: updatedComponent.id,
-        name: updatedComponent.name,
-        type: updatedComponent.type,
-        status: updatedComponent.status,
-        criticality: updatedComponent.criticality,
-        description: updatedComponent.description,
-        location: updatedComponent.location,
-        owner: updatedComponent.owner,
-        vendor: updatedComponent.vendor,
-        lastUpdated: new Date(updatedComponent.last_updated),
-        metadata: updatedComponent.metadata || {}
-      };
-      
-      AuditService.logComponentAction('UPDATE', mappedComponent, beforeComponent);
+      // The service already returns ITComponent with lastUpdated
+      AuditService.logComponentAction('UPDATE', updatedComponent, beforeComponent);
       
       set((state) => ({
-        components: state.components.map((c) => (c.id === id ? mappedComponent : c)),
+        components: state.components.map((c) => (c.id === id ? updatedComponent : c)),
         isLoading: false
       }));
       
       toast.success('Component updated successfully');
-      return mappedComponent;
+      return updatedComponent;
     } catch (error) {
       console.error('Failed to update component:', error);
       set({ error: 'Failed to update component', isLoading: false });
@@ -425,123 +430,66 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
     }
   },
   
-  addWorkflow: (workflowData: Omit<BusinessWorkflow, 'id' | 'lastUpdated' | 'steps'> & { steps?: WorkflowStep[] }): BusinessWorkflow => {
-    const now = new Date();
-    const newWorkflow: BusinessWorkflow = {
-      ...workflowData,
-      id: `wf_${uuidv4()}`,
-      lastUpdated: now,
-      steps: workflowData.steps || []
-    };
-    
-    set(state => ({
-      workflows: [...state.workflows, newWorkflow]
-    }));
-    
-    return newWorkflow;
-  },
-  
-  updateWorkflow: (id: string, patch: Partial<Omit<BusinessWorkflow, 'id' | 'lastUpdated'>>): BusinessWorkflow | undefined => {
-    const now = new Date();
-    let updatedWorkflow: BusinessWorkflow | undefined;
-    
-    set(state => {
-      const updatedWorkflows = state.workflows.map(w => {
-        if (w.id === id) {
-          updatedWorkflow = {
-            ...w,
-            ...patch,
-            lastUpdated: now
-          };
-          return updatedWorkflow;
-        }
-        return w;
-      });
-      
-      return { workflows: updatedWorkflows };
-    });
-    
-    return updatedWorkflow;
-  },
-  
-  deleteWorkflow: (id: string) => {
-    set(state => ({
-      workflows: state.workflows.filter(w => w.id !== id)
-    }));
-  },
-  
-  // Load initial data
-  loadData: async () => {
+  addWorkflow: async (workflowData: Omit<BusinessWorkflow, 'id' | 'lastUpdated' | 'steps'> & { steps?: WorkflowStep[] }): Promise<BusinessWorkflow> => {
     try {
-      console.log('Loading data from database...');
-      set({ isLoading: true, error: null });
-      
-      // Fetch data from the database with error handling for each request
-      const [dbComponents, dbDependencies] = await Promise.all([
-        fetchComponents().catch(error => {
-          console.error('Failed to load components:', error);
-          toast.error('Failed to load components');
-          return [];
-        }),
-        fetchDependencies().catch(error => {
-          console.error('Failed to load dependencies:', error);
-          toast.error('Failed to load dependencies');
-          return [];
-        })
-      ]);
-      
-      console.log(`Loaded ${dbComponents.length} components and ${dbDependencies.length} dependencies`);
-      
-      // Map database components to frontend model with type safety
-      const normalizedComponents = (dbComponents || []).map(comp => {
-        try {
-          return {
-            id: comp.id,
-            name: comp.name || 'Unnamed Component',
-            type: comp.type || 'unknown',
-            status: comp.status || 'unknown',
-            criticality: comp.criticality || 'medium',
-            description: comp.description || '',
-            location: comp.location || '',
-            owner: comp.owner || '',
-            vendor: comp.vendor || '',
-            lastUpdated: comp.lastUpdated || new Date(),
-            metadata: comp.metadata || {}
-          };
-        } catch (error) {
-          console.error('Error normalizing component:', error, 'Raw data:', comp);
-          return null;
-        }
-      }).filter(Boolean) as ITComponent[];
-      
-      // Dependencies are already normalized in the fetchDependencies function
-      const normalizedDependencies = dbDependencies || [];
-      
-      console.log('Normalized data:', { 
-        components: normalizedComponents.length, 
-        dependencies: normalizedDependencies.length 
+      // Create workflow in Supabase
+      const newWorkflow = await createWorkflowApi({
+        ...workflowData,
+        steps: workflowData.steps || []
       });
       
-      // Update the store with the normalized data
-      set({ 
-        components: normalizedComponents, 
-        dependencies: normalizedDependencies, 
-        isLoading: false 
-      });
+      // Update local state
+      set(state => ({
+        workflows: [...state.workflows, newWorkflow]
+      }));
       
-      console.log('Data loaded successfully:', {
-        components: normalizedComponents.length,
-        dependencies: normalizedDependencies.length
-      });
-      
-      // Return the loaded data in case it's needed by the caller
-      return { components: normalizedComponents, dependencies: normalizedDependencies };
-      
+      toast.success('Workflow created successfully');
+      return newWorkflow;
     } catch (error) {
-      console.error('Failed to load data:', error);
-      set({ error: 'Failed to load data', isLoading: false });
-      toast.error('Failed to load data from server');
+      console.error('Error creating workflow:', error);
+      toast.error(`Failed to create workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
-  }
-}));
+  },
+  
+  updateWorkflow: async (id: string, patch: Partial<Omit<BusinessWorkflow, 'id' | 'lastUpdated'>>) => {
+    try {
+      // Update workflow in Supabase
+      const updatedWorkflow = await updateWorkflowApi(id, patch);
+      
+      if (updatedWorkflow) {
+        // Update local state
+        set(state => ({
+          workflows: state.workflows.map(w => 
+            w.id === id ? updatedWorkflow : w
+          )
+        }));
+        
+        toast.success('Workflow updated successfully');
+        return updatedWorkflow;
+      }
+    } catch (error) {
+      console.error('Error updating workflow:', error);
+      toast.error(`Failed to update workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  },
+  
+  deleteWorkflow: async (id: string) => {
+    try {
+      // Delete workflow from Supabase
+      await deleteWorkflowApi(id);
+      
+      // Update local state
+      set(state => ({
+        workflows: state.workflows.filter(w => w.id !== id)
+      }));
+      
+      toast.success('Workflow deleted successfully');
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      toast.error(`Failed to delete workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  },
+}))

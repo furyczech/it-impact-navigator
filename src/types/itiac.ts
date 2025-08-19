@@ -1,7 +1,26 @@
 export interface ITComponent {
   id: string;
   name: string;
-  type: 'server' | 'database' | 'api' | 'load-balancer' | 'network' | 'application' | 'service';
+  type: 'server'
+    | 'database'
+    | 'api'
+    | 'load-balancer'
+    | 'network'
+    | 'application'
+    | 'service'
+    | 'storage'
+    | 'endpoint'
+    | 'virtual-machine'
+    | 'firewall'
+    | 'router'
+    | 'switch'
+    | 'cloud-instance'
+    | 'license'
+    | 'backup'
+    | 'domain'
+    | 'certificate'
+    | 'user-account'
+    | 'modul';
   status: 'online' | 'offline' | 'warning' | 'maintenance';
   criticality: 'low' | 'medium' | 'high' | 'critical';
   description?: string;
@@ -19,6 +38,7 @@ export interface ComponentDependency {
   type: 'requires' | 'uses' | 'feeds' | 'monitors';
   criticality: 'low' | 'medium' | 'high' | 'critical';
   description?: string;
+  lastUpdated?: Date;
 }
 
 export interface WorkflowStep {

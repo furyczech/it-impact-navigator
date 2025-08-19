@@ -43,23 +43,23 @@ export class ExportService {
       'Last Updated': comp.lastUpdated.toISOString()
     }));
 
-    this.exportToCSV(data, 'itiac-components.csv', headers);
+    this.exportToCSV(data, 'itiac-it-assets.csv', headers);
   }
 
   static exportDependenciesToCSV(dependencies: ComponentDependency[], components: ITComponent[]) {
     const getComponentName = (id: string) => components.find(c => c.id === id)?.name || id;
     
-    const headers = ['ID', 'Source Component', 'Target Component', 'Dependency Type', 'Criticality', 'Description'];
+    const headers = ['ID', 'Source IT Asset', 'Target IT Asset', 'Dependency Type', 'Criticality', 'Description'];
     const data = dependencies.map(dep => ({
       'ID': dep.id,
-      'Source Component': getComponentName(dep.sourceId),
-      'Target Component': getComponentName(dep.targetId),
+      'Source IT Asset': getComponentName(dep.sourceId),
+      'Target IT Asset': getComponentName(dep.targetId),
       'Dependency Type': dep.type,
       'Criticality': dep.criticality,
       'Description': dep.description || ''
     }));
 
-    this.exportToCSV(data, 'itiac-dependencies.csv', headers);
+    this.exportToCSV(data, 'itiac-it-asset-dependencies.csv', headers);
   }
 
   static exportWorkflowsToCSV(workflows: BusinessWorkflow[], components: ITComponent[]) {
@@ -113,14 +113,14 @@ export class ExportService {
 
   static exportImpactAnalysisResults(results: any[]) {
     const headers = [
-      'Component ID', 'Component Name', 'Business Impact Score', 'Risk Level',
+      'IT Asset ID', 'IT Asset Name', 'Business Impact Score', 'Risk Level',
       'Direct Impacts Count', 'Direct Impacts', 'Indirect Impacts Count', 'Indirect Impacts',
       'Affected Workflows Count', 'Affected Workflows', 'Analysis Date'
     ];
     
     const data = results.map(result => ({
-      'Component ID': result.componentId,
-      'Component Name': result.componentName,
+      'IT Asset ID': result.componentId,
+      'IT Asset Name': result.componentName,
       'Business Impact Score': result.businessImpactScore,
       'Risk Level': result.riskLevel,
       'Direct Impacts Count': result.directImpacts.length,
@@ -161,7 +161,7 @@ export class ExportService {
     yPosition += 15;
     
     pdf.setFontSize(12);
-    pdf.text(`Total Components: ${components.length}`, 25, yPosition);
+    pdf.text(`Total IT Assets: ${components.length}`, 25, yPosition);
     yPosition += 10;
     pdf.text(`Total Dependencies: ${dependencies.length}`, 25, yPosition);
     yPosition += 10;
@@ -169,12 +169,12 @@ export class ExportService {
     yPosition += 10;
     
     const criticalComponents = components.filter(c => c.criticality === 'critical').length;
-    pdf.text(`Critical Components: ${criticalComponents}`, 25, yPosition);
+    pdf.text(`Critical IT Assets: ${criticalComponents}`, 25, yPosition);
     yPosition += 20;
 
     // Components by type
     pdf.setFontSize(16);
-    pdf.text('Components by Type', 20, yPosition);
+    pdf.text('IT Assets by Type', 20, yPosition);
     yPosition += 15;
     
     const componentsByType = components.reduce((acc, comp) => {
@@ -205,7 +205,7 @@ export class ExportService {
         .slice(0, 5);
 
       pdf.setFontSize(12);
-      pdf.text('Top 5 Highest Impact Components:', 25, yPosition);
+      pdf.text('Top 5 Highest Impact IT Assets:', 25, yPosition);
       yPosition += 10;
 
       topImpacts.forEach((result, index) => {

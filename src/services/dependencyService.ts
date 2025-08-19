@@ -19,7 +19,6 @@ type DBDependency = {
  */
 export const fetchDependencies = async (): Promise<ComponentDependency[]> => {
   try {
-    console.log('Fetching dependencies from Supabase...');
     const { data, error, status } = await supabase
       .from('dependencies')
       .select('*')
@@ -29,8 +28,6 @@ export const fetchDependencies = async (): Promise<ComponentDependency[]> => {
       console.error('Error fetching dependencies:', error);
       throw error;
     }
-    
-    console.log(`Fetched ${data?.length || 0} dependencies`);
     
     if (!data) return [];
     

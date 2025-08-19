@@ -40,7 +40,7 @@ export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
 
   const stats = [
     {
-      title: 'Total Components',
+      title: 'Total IT Assets',
       value: String(totalComponents),
       icon: Server,
       change: `${onlineCount}/${totalComponents} online`,
@@ -178,9 +178,9 @@ export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
                 <div className="w-20 h-20 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
                   <Server className="w-10 h-10 text-primary-foreground" />
                 </div>
-                <h3 className="font-semibold text-foreground">Component Status</h3>
+                <h3 className="font-semibold text-foreground">IT Asset Status</h3>
                 <p className="text-2xl font-bold text-success mt-1">{onlineCount}/{totalComponents}</p>
-                <p className="text-sm text-muted-foreground">Components online</p>
+                <p className="text-sm text-muted-foreground">IT assets online</p>
               </div>
               <div className="text-center">
                 <div className="w-20 h-20 mx-auto mb-4 bg-warning/10 rounded-full flex items-center justify-center border border-warning/20">
@@ -210,7 +210,7 @@ export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
               </Button>
               <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('components')}>
                 <Server className="w-5 h-5 mr-3" />
-                Add Component
+                Add IT Asset
               </Button>
               <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('dependencies')}>
                 <Network className="w-5 h-5 mr-3" />

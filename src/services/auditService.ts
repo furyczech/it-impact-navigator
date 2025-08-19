@@ -242,7 +242,7 @@ export class AuditService {
     const csvContent = [
       'Timestamp,User,Action,Entity Type,Entity Name,Details',
       ...logs.map(log => 
-        `\"${log.timestamp.toISOString()}\",\"${log.userId || 'N/A'}\",\"${log.action}\",\"${log.entityType}\",\"${log.entityName || 'N/A'}\",\"${JSON.stringify(log.details).replace(/\"/g, '\"\"')}\"`
+        `"${log.timestamp.toISOString()}","${log.userId || 'N/A'}","${log.action}","${log.entityType}","${log.entityName || 'N/A'}","${JSON.stringify(log.details).replace(/"/g, '""')}"`
       )
     ].join('\n');
 
