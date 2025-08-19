@@ -18,7 +18,7 @@ const navigationItems = [
   { icon: BarChart3, label: "Dashboard", id: "dashboard" },
   { icon: Server, label: "IT Assets", id: "components" },
   { icon: Network, label: "Dependencies", id: "dependencies" },
-  { icon: GitBranch, label: "Workflows", id: "workflows" },
+  { icon: GitBranch, label: "Business Processes", id: "workflows" },
   { icon: Shield, label: "Impact Analysis", id: "analysis" },
   { icon: Database, label: "Import/Export", id: "data" },
   { icon: FileText, label: "Reports", id: "reports" },

@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
-import { ComponentDependency, ITComponent } from "@/types/itiac";
+import { ComponentDependency } from "@/types/itiac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Network, GitBranch, AlertTriangle, Zap, Plus, Trash2, Maximize2, Minimize2, Focus, Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Network, GitBranch, Plus, Trash2, Maximize2, Minimize2, Focus } from "lucide-react";
 import '@xyflow/react/dist/style.css';
 import { DependencyNetworkFlow } from './DependencyNetworkFlow';
 
@@ -56,6 +55,9 @@ export const DependenciesVisualization = () => {
   const [nodeCritFilter, setNodeCritFilter] = useState<'all'|'low'|'medium'|'high'|'critical'>('all');
   const [edgeTypeFilter, setEdgeTypeFilter] = useState<string>('all');
   const [edgeCritFilter, setEdgeCritFilter] = useState<'all'|'low'|'medium'|'high'|'critical'>('all');
+  // Layout controls
+  const [layoutEngine, setLayoutEngine] = useState<'internal'|'dagre'|'elk'>('internal');
+  const [direction, setDirection] = useState<'LR'|'TB'>('TB');
 
   const getComponentDependencies = useCallback((componentId: string) => {
     const incoming = dependencies.filter(dep => dep.targetId === componentId);
@@ -76,34 +78,7 @@ export const DependenciesVisualization = () => {
 
   const filteredComponents = getFilteredComponents();
 
-  // Dynamic metrics: SPOF and Network Health
-  const spofCount = useMemo(() => {
-    if (!components.length) return 0;
-    const incomingMap = new Map<string, number>();
-    dependencies.forEach(d => {
-      incomingMap.set(d.targetId, (incomingMap.get(d.targetId) || 0) + 1);
-    });
-    // Heuristic: SPOF = nodes with >=2 incoming deps OR (>=1 incoming and criticality high/critical)
-    return components.reduce((acc, c) => {
-      const inc = incomingMap.get(c.id) || 0;
-      const highCrit = c.criticality === 'high' || c.criticality === 'critical';
-      if (inc >= 2 || (inc >= 1 && highCrit)) return acc + 1;
-      return acc;
-    }, 0);
-  }, [components, dependencies]);
-
-  const networkHealth = useMemo(() => {
-    if (!components.length) return 100;
-    const total = components.length;
-    const online = components.filter(c => c.status === 'online').length;
-    const onlineRatio = online / total;
-    const totalDeps = dependencies.length;
-    const criticalDeps = dependencies.filter(d => d.criticality === 'critical').length;
-    const criticalEdgeRatio = totalDeps ? (criticalDeps / totalDeps) : 0;
-    // Weighted score: 70% node health, 30% edge risk
-    const score = 70 * onlineRatio + 30 * (1 - criticalEdgeRatio);
-    return Math.max(0, Math.min(100, Math.round(score)));
-  }, [components, dependencies]);
+  // KPI metrics removed (spofCount, networkHealth) as per request
 
   // Options for filters
   const componentTypes = useMemo(() => Array.from(new Set(components.map(c => String(c.type)))).sort(), [components]);
@@ -118,13 +93,15 @@ export const DependenciesVisualization = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dependencies Visualization</h1>
+          <h1 className="text-3xl font-bold text-foreground whitespace-nowrap">Dependencies Visualization</h1>
           <p className="text-muted-foreground mt-1">Visualize and manage IT asset dependencies</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 md:justify-end">
+        <div className="flex items-center gap-2 w-full">
+          {/* Centered filters */}
+          <div className="flex flex-nowrap items-center gap-2 mx-auto overflow-x-auto">
           {/* Grouping */}
           <Select value={groupBy} onValueChange={(v: any) => { setGroupBy(v); setLayoutTrigger(x=>x+1); }}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Group by" /></SelectTrigger>
@@ -132,6 +109,25 @@ export const DependenciesVisualization = () => {
               <SelectItem value="none">No Grouping</SelectItem>
               <SelectItem value="type">Group by Type</SelectItem>
               <SelectItem value="criticality">Group by Criticality</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Layout Engine */}
+          <Select value={layoutEngine} onValueChange={(v: any) => { setLayoutEngine(v); setLayoutTrigger(x=>x+1); }}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Layout engine" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internal">Internal</SelectItem>
+              <SelectItem value="dagre">Dagre</SelectItem>
+              <SelectItem value="elk">ELK</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Direction */}
+          <Select value={direction} onValueChange={(v: any) => { setDirection(v); setLayoutTrigger(x=>x+1); }}>
+            <SelectTrigger className="w-36"><SelectValue placeholder="Direction" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TB">Top-Bottom</SelectItem>
+              <SelectItem value="LR">Left-Right</SelectItem>
             </SelectContent>
           </Select>
 
@@ -188,200 +184,97 @@ export const DependenciesVisualization = () => {
               <SelectItem value="offline">Issues Only</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" onClick={() => setFitViewTrigger(x=>x+1)} aria-label="Fit to view">
-            <Focus className="w-4 h-4 mr-2" /> Fit to view
-          </Button>
-          <Button onClick={() => setFullscreenOpen(true)} aria-label="Fullscreen">
-            <Maximize2 className="w-4 h-4 mr-2" /> Fullscreen
-          </Button>
-          <Dialog open={isDepDialogOpen} onOpenChange={setIsDepDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-primary hover:opacity-90">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Dependency
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add New Dependency</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <Select value={newDependency.sourceId} onValueChange={(value) => setNewDependency({...newDependency, sourceId: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source IT asset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {components.map(component => (
-                      <SelectItem key={component.id} value={component.id}>
-                        {component.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={newDependency.targetId} onValueChange={(value) => setNewDependency({...newDependency, targetId: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select target IT asset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {components.map(component => (
-                      <SelectItem key={component.id} value={component.id}>
-                        {component.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={newDependency.type} onValueChange={(value) => setNewDependency({...newDependency, type: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select dependency type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="requires">Requires</SelectItem>
-                    <SelectItem value="uses">Uses</SelectItem>
-                    <SelectItem value="feeds">Feeds</SelectItem>
-                    <SelectItem value="monitors">Monitors</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={newDependency.criticality} onValueChange={(value) => setNewDependency({...newDependency, criticality: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select criticality" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="flex justify-end space-x-2 pt-4">
-                  <Button variant="outline" onClick={() => setIsDepDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={() => {
-                    if (newDependency.sourceId && newDependency.targetId && newDependency.type && newDependency.criticality) {
-                      const dependency: ComponentDependency = {
-                        id: Date.now().toString(),
-                        sourceId: newDependency.sourceId,
-                        targetId: newDependency.targetId,
-                        type: newDependency.type as any,
-                        criticality: newDependency.criticality as any
-                      };
-                      addDependency(dependency);
-                      setNewDependency({ sourceId: "", targetId: "", type: "", criticality: "" });
-                      setIsDepDialogOpen(false);
-                    }
-                  }}>Create Dependency</Button>
+          </div>
+          {/* Actions: only '+ Add Dependency' right-aligned */}
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <Dialog open={isDepDialogOpen} onOpenChange={setIsDepDialogOpen}>
+              <DialogTrigger asChild>
+                <button
+                  className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base inline-flex items-center"
+                  title="Add Dependency"
+                  aria-label="Add Dependency"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Dependency
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add New Dependency</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <Select value={newDependency.sourceId} onValueChange={(value) => setNewDependency({...newDependency, sourceId: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select source IT asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {components.map(component => (
+                        <SelectItem key={component.id} value={component.id}>
+                          {component.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={newDependency.targetId} onValueChange={(value) => setNewDependency({...newDependency, targetId: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select target IT asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {components.map(component => (
+                        <SelectItem key={component.id} value={component.id}>
+                          {component.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={newDependency.type} onValueChange={(value) => setNewDependency({...newDependency, type: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select dependency type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="requires">Requires</SelectItem>
+                      <SelectItem value="uses">Uses</SelectItem>
+                      <SelectItem value="feeds">Feeds</SelectItem>
+                      <SelectItem value="monitors">Monitors</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={newDependency.criticality} onValueChange={(value) => setNewDependency({...newDependency, criticality: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select criticality" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsDepDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => {
+                      if (newDependency.sourceId && newDependency.targetId && newDependency.type && newDependency.criticality) {
+                        const dependency: ComponentDependency = {
+                          id: Date.now().toString(),
+                          sourceId: newDependency.sourceId,
+                          targetId: newDependency.targetId,
+                          type: newDependency.type as any,
+                          criticality: newDependency.criticality as any
+                        };
+                        addDependency(dependency);
+                        setNewDependency({ sourceId: "", targetId: "", type: "", criticality: "" });
+                        setIsDepDialogOpen(false);
+                      }
+                    }}>Create Dependency</Button>
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
+      
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Network className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Total Dependencies
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Celkový počet vazeb (hran) mezi IT assety v síti.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{dependencies.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Critical Paths
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Počet závislostí označených jako "critical", jejichž selhání má vysoký dopad.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">
-                  {dependencies.filter(d => d.criticality === "critical").length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-warning/10 rounded-lg">
-                <Zap className="w-5 h-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Single Points of Failure
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých IT assetů (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{spofCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-success/10 rounded-lg">
-                <GitBranch className="w-5 h-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Network Health
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="max-w-xs text-sm">
-                          Celkové zdraví sítě: 70% podíl dostupnosti uzlů (online) + 30% penalizace za podíl kritických závislostí.
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{networkHealth}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Stats removed per request */}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Network Map */}
@@ -393,24 +286,47 @@ export const DependenciesVisualization = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DependencyNetworkFlow 
-              components={filteredComponents}
-              dependencies={dependencies}
-              groupBy={groupBy}
-              filters={filters}
-              layoutTrigger={layoutTrigger}
-              fitViewTrigger={fitViewTrigger}
-              onAddDependency={(sourceId: string, targetId: string) => {
-                const dependency: ComponentDependency = {
-                  id: Date.now().toString(),
-                  sourceId,
-                  targetId,
-                  type: "uses",
-                  criticality: "medium"
-                };
-                addDependency(dependency);
-              }}
-            />
+            {/* Legend (match NetworkTopology) */}
+            <div className="px-4 pt-2">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-2">
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--success))'}} /> Online</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--warning))'}} /> Warning</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} /> Impacted</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--destructive))'}} /> Offline</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
+              </div>
+            </div>
+            <div className="relative">
+              {/* Overlay controls at top-right of the map */}
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)} aria-label="Fit to view">
+                  <Focus className="w-4 h-4 mr-1" /> Fit to view
+                </Button>
+                <Button size="sm" onClick={() => setFullscreenOpen(true)} aria-label="Fullscreen">
+                  <Maximize2 className="w-4 h-4 mr-1" /> Fullscreen
+                </Button>
+              </div>
+              <DependencyNetworkFlow 
+                components={filteredComponents}
+                dependencies={dependencies}
+                groupBy={groupBy}
+                filters={filters}
+                layoutTrigger={layoutTrigger}
+                fitViewTrigger={fitViewTrigger}
+                layoutEngine={layoutEngine}
+                direction={direction}
+                onAddDependency={(sourceId: string, targetId: string) => {
+                  const dependency: ComponentDependency = {
+                    id: Date.now().toString(),
+                    sourceId,
+                    targetId,
+                    type: "uses",
+                    criticality: "medium"
+                  };
+                  addDependency(dependency);
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -539,7 +455,21 @@ export const DependenciesVisualization = () => {
               <Network className="w-5 h-5 text-primary" />
               <span className="font-medium">Dependency Network Map</span>
             </div>
-            <div className="flex items-center gap-2">
+            {/* Fit/Close moved to map overlay */}
+          </div>
+          {/* Legend (fullscreen) */}
+          <div className="px-2 pt-1">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-1">
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--success))'}} /> Online</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--warning))'}} /> Warning</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} /> Impacted</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--destructive))'}} /> Offline</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
+            </div>
+          </div>
+          <div className="relative h-[calc(92vh-72px)]">
+            {/* Overlay controls at top-right in fullscreen map */}
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)}>
                 <Focus className="w-4 h-4 mr-1" /> Fit to view
               </Button>
@@ -547,8 +477,6 @@ export const DependenciesVisualization = () => {
                 <Minimize2 className="w-4 h-4 mr-1" /> Close
               </Button>
             </div>
-          </div>
-          <div className="h-[calc(92vh-44px)]">
             <DependencyNetworkFlow
               components={filteredComponents}
               dependencies={dependencies}
@@ -557,6 +485,8 @@ export const DependenciesVisualization = () => {
               layoutTrigger={layoutTrigger}
               fitViewTrigger={fitViewTrigger}
               fullscreen
+              layoutEngine={layoutEngine}
+              direction={direction}
               onAddDependency={(sourceId: string, targetId: string) => {
                 const dependency: ComponentDependency = {
                   id: Date.now().toString(),

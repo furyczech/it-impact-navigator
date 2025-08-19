@@ -40,17 +40,24 @@ const mapDbWorkflow = (db: any): BusinessWorkflow => ({
 });
 
 // Map DB row to WorkflowStep
-const mapDbStep = (db: any): WorkflowStep => ({
-  id: db.id,
-  name: db.name,
-  description: db.description || '',
-  primaryComponentId: db.primary_component_id || undefined,
-  // DB does not have array columns; keep only single primary id
-  primaryComponentIds: undefined,
-  alternativeComponentIds: undefined,
-  fallbackWorkflowId: db.fallback_workflow_id || undefined,
-  order: db.order ?? 0
-});
+const mapDbStep = (db: any): WorkflowStep => {
+  const primaryArray: string[] = Array.isArray(db.primary_component_ids)
+    ? db.primary_component_ids
+    : (db.primary_component_id ? [db.primary_component_id] : []);
+  const alternativeArray: string[] = Array.isArray(db.alternative_component_ids)
+    ? db.alternative_component_ids
+    : [];
+  return {
+    id: db.id,
+    name: db.name,
+    description: db.description || '',
+    primaryComponentId: db.primary_component_id || (primaryArray.length ? primaryArray[0] : undefined),
+    primaryComponentIds: primaryArray,
+    alternativeComponentIds: alternativeArray,
+    fallbackWorkflowId: db.fallback_workflow_id || undefined,
+    order: db.order ?? 0
+  };
+};
 
 // Workflow operations
 export const fetchWorkflows = async (): Promise<BusinessWorkflow[]> => {
@@ -222,19 +229,49 @@ export const saveWorkflowSteps = async (workflowId: string, steps: WorkflowStep[
     workflow_id: workflowId,
     name: s.name,
     description: s.description || '',
-    // Persist only single primary component id; pick first from array if provided
+    // Persist both legacy single id and JSONB arrays for full fidelity
     primary_component_id: s.primaryComponentId || (s.primaryComponentIds && s.primaryComponentIds.length > 0 ? s.primaryComponentIds[0] : null),
+    primary_component_ids: (s.primaryComponentIds && s.primaryComponentIds.length > 0)
+      ? s.primaryComponentIds
+      : (s.primaryComponentId ? [s.primaryComponentId] : []),
+    alternative_component_ids: s.alternativeComponentIds ?? [],
     fallback_workflow_id: s.fallbackWorkflowId || null,
     order: s.order ?? idx,
     created_at: now,
     updated_at: now
   }));
   
-  const { data, error } = await supabase
+  // Try insert with JSONB columns first; if the view doesn't have them yet, retry without
+  let data: any[] | null = null;
+  let error: any = null;
+  const insertReq = await supabase
     .from('workflow_steps')
     .insert(rows)
     .select();
-  
-  if (error) throw error;
+  data = insertReq.data as any[] | null;
+  error = insertReq.error;
+  if (error && String(error.message || '').includes('column') && String(error.message || '').includes('does not exist')) {
+    // Retry with legacy shape only
+    const legacyRows = rows.map(r => ({
+      id: r.id,
+      workflow_id: r.workflow_id,
+      name: r.name,
+      description: r.description,
+      primary_component_id: r.primary_component_id,
+      fallback_workflow_id: r.fallback_workflow_id,
+      order: r.order,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+    const retry = await supabase
+      .from('workflow_steps')
+      .insert(legacyRows)
+      .select();
+    if (retry.error) throw retry.error;
+    data = retry.data as any[] | null;
+  } else if (error) {
+    throw error;
+  }
+  // Map DB rows; arrays will be present if JSONB exists, otherwise derived from legacy
   return (data || []).map(mapDbStep);
 };

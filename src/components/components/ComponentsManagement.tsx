@@ -134,9 +134,9 @@ export const ComponentsManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">IT Assets Management</h1>
           <p className="text-muted-foreground mt-1">Manage IT assets and their configurations</p>
         </div>
-        <div className="flex space-x-2 w-[140px]">
+        <div className="flex items-center gap-2">
           <button
-            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base"
+            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base inline-flex items-center whitespace-nowrap"
             title="Add IT Asset"
             aria-label="Add IT Asset"
             onClick={() => setIsDialogOpen(true)}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { BusinessWorkflow, WorkflowStep, ITComponent } from "@/types/itiac";
 import { WorkflowForm } from "@/components/forms/WorkflowForm";
-import { ExportService } from "@/services/exportService";
+// removed ExportService (no longer used)
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, GitBranch, Users, AlertTriangle, CheckCircle, Search, ArrowRight, Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, GitBranch, Users, Search, ArrowRight } from "lucide-react";
 
 
 const criticalityColors = {
@@ -85,17 +84,19 @@ export const WorkflowsManagement = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Workflows Management</h1>
-          <p className="text-muted-foreground mt-1">Define and manage business process workflows</p>
+          <h1 className="text-3xl font-bold text-foreground">Business Processes</h1>
+          <p className="text-muted-foreground mt-1">Define and manage business processes and their workflows</p>
         </div>
         <div className="flex space-x-2">
-          <Button onClick={() => setIsFormOpen(true)} className="bg-gradient-primary hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" />
-            Create Workflow
-          </Button>
-          <Button variant="outline" onClick={() => ExportService.exportWorkflowsToCSV(workflows, components)}>
-            Export CSV
-          </Button>
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base inline-flex items-center whitespace-nowrap"
+            title="Create Process"
+            aria-label="Create Process"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Create Process
+          </button>
         </div>
         
         <WorkflowForm
@@ -117,117 +118,7 @@ export const WorkflowsManagement = () => {
         />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <GitBranch className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Total Workflows
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Celkový počet definovaných business workflow v systému.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{workflows.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Critical Workflows
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Počet workflow označených kritičností "critical" (nejvyšší důležitost pro business).</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">
-                  {workflows.filter(w => w.criticality === "critical").length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-success/10 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Healthy Workflows
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="max-w-xs text-sm">
-                          Workflow s nízkým rizikem podle aktuální kritičnosti jejich klíčových IT assetů.
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">
-                  {workflows.filter(w => getWorkflowRisk(w) === "low").length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-secondary/10 rounded-lg">
-                <Users className="w-5 h-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Business Processes
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Počet unikátních business procesů, ke kterým jsou workflow přiřazena.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">
-                  {new Set(workflows.map(w => w.businessProcess)).size}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Stats removed as per request */}
 
       {/* Filters */}
       <Card className="bg-card border-border">
@@ -237,7 +128,7 @@ export const WorkflowsManagement = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search workflows..."
+                  placeholder="Search processes..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -266,15 +157,14 @@ export const WorkflowsManagement = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <GitBranch className="w-5 h-5 text-primary" />
-              <span>Business Workflows ({filteredWorkflows.length})</span>
+              <span>Business Processes ({filteredWorkflows.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Workflow</TableHead>
-                  <TableHead>Business Process</TableHead>
+                  <TableHead>Process</TableHead>
                   <TableHead>Criticality</TableHead>
                   <TableHead>Risk Level</TableHead>
                   <TableHead>Steps</TableHead>
@@ -296,17 +186,14 @@ export const WorkflowsManagement = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{workflow.businessProcess}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={criticalityColors[workflow.criticality]} className="capitalize">
+                        <Badge variant={criticalityColors[workflow.criticality]} className="capitalize text-base px-3.5 py-1.5">
                           {workflow.criticality}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge 
                           variant={riskLevel === "high" ? "destructive" : riskLevel === "medium" ? "secondary" : "default"}
-                          className="capitalize"
+                          className="capitalize text-base px-3.5 py-1.5"
                         >
                           {riskLevel}
                         </Badge>
@@ -349,12 +236,12 @@ export const WorkflowsManagement = () => {
           </CardContent>
         </Card>
 
-        {/* Workflow Details */}
+        {/* Process Details */}
         <Card className="bg-card border-border shadow-depth">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="w-5 h-5 text-primary" />
-              <span>Workflow Details</span>
+              <span>Process Details</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -366,14 +253,13 @@ export const WorkflowsManagement = () => {
                 </div>
                 
                 <div className="flex items-center space-x-4">
-                  <Badge variant={criticalityColors[selectedWorkflow.criticality]}>
+                  <Badge variant={criticalityColors[selectedWorkflow.criticality]} className="text-base px-3.5 py-1.5 capitalize">
                     {selectedWorkflow.criticality}
                   </Badge>
-                  <Badge variant="outline">{selectedWorkflow.businessProcess}</Badge>
                 </div>
 
                 <div>
-                  <h4 className="font-medium text-foreground mb-3">Workflow Steps</h4>
+                  <h4 className="font-medium text-foreground mb-3">Process Steps</h4>
                   <div className="space-y-3">
                     {selectedWorkflow.steps
                       .sort((a, b) => a.order - b.order)
@@ -386,11 +272,30 @@ export const WorkflowsManagement = () => {
                             <div className="font-medium text-foreground">{step.name}</div>
                             <div className="text-sm text-muted-foreground">{step.description}</div>
                             <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-1">
-                              <span>Primary:</span>
-                              <Badge variant="outline" className="text-xs">
-                                {getComponentName(step.primaryComponentId)}
-                              </Badge>
+                              <span>Primary IT Assets:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {(((step.primaryComponentIds && step.primaryComponentIds.length > 0)
+                                  ? step.primaryComponentIds
+                                  : (step.primaryComponentId ? [step.primaryComponentId] : [])) as string[])
+                                  .map(pid => (
+                                    <Badge key={pid} variant="outline" className="text-xs">
+                                      {getComponentName(pid)}
+                                    </Badge>
+                                  ))}
+                              </div>
                             </div>
+                            {step.alternativeComponentIds && step.alternativeComponentIds.length > 0 && (
+                              <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-1">
+                                <span>Alternative IT Assets:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {step.alternativeComponentIds.map(aid => (
+                                    <Badge key={aid} variant="secondary" className="text-xs">
+                                      {getComponentName(aid)}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                           {index < selectedWorkflow.steps.length - 1 && (
                             <ArrowRight className="w-4 h-4 text-muted-foreground mt-1" />
@@ -410,7 +315,7 @@ export const WorkflowsManagement = () => {
             ) : (
               <div className="text-center py-8">
                 <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Select a workflow to view details</p>
+                <p className="text-muted-foreground">Select a process to view details</p>
               </div>
             )}
           </CardContent>

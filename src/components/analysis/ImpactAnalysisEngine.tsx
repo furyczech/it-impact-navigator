@@ -43,6 +43,7 @@ interface ImpactResult {
     stepId: string;
     stepName: string;
     reasonComponentIds: string[]; // components that caused the impact
+    severity: 'warning' | 'error';
   }[];
   businessImpactScore: number;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -64,16 +65,18 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
   const affectedWorkflowsByNonOnline = useMemo(() => (
     workflows.filter(w => 
       w.steps.some(step => {
-        const primaries = new Set<string>([
+        const primaryIds = [
           ...(step.primaryComponentId ? [step.primaryComponentId] : []),
           ...(step.primaryComponentIds || [])
-        ]);
-        if ([...primaries].some(id => nonOnlineIds.has(id))) return true;
-        if (step.alternativeComponentIds && step.alternativeComponentIds.some(id => nonOnlineIds.has(id))) return true;
-        return false;
+        ];
+        const anyPrimaryDown = primaryIds.some(id => nonOnlineIds.has(id));
+        if (!anyPrimaryDown) return false;
+        const alts = step.alternativeComponentIds || [];
+        const anyAltOnline = alts.some(aid => components.find(c => c.id === aid)?.status === 'online');
+        return !anyAltOnline; // count only real errors
       })
     )
-  ), [workflows, nonOnlineIds]);
+  ), [workflows, nonOnlineIds, components]);
 
   const analyzeImpact = (componentId: string): ImpactResult => {
     const component = components.find(c => c.id === componentId);
@@ -138,25 +141,26 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
     const affectedWorkflows = new Set<string>();
     for (const workflow of workflows) {
       for (const step of workflow.steps) {
-        const primaries = new Set<string>([
+        const primaryIds = [
           ...(step.primaryComponentId ? [step.primaryComponentId] : []),
           ...(step.primaryComponentIds || [])
-        ]);
-        const candidateIds = new Set<string>([
-          ...primaries,
-          ...(step.alternativeComponentIds || [])
-        ]);
-        const reason = [...candidateIds].filter(id => impactedSet.has(id));
-        if (reason.length > 0) {
+        ];
+        const altIds = step.alternativeComponentIds || [];
+        const primaryReason = primaryIds.filter(id => impactedSet.has(id));
+        if (primaryReason.length === 0) continue; // primary unaffected
+        const anyAltOnline = altIds.some(aid => components.find(c => c.id === aid)?.status === 'online');
+        const severity: 'warning' | 'error' = anyAltOnline ? 'warning' : 'error';
+        if (severity === 'error') {
           affectedWorkflows.add(workflow.name);
-          affectedSteps.push({
-            workflowId: workflow.id,
-            workflowName: workflow.name,
-            stepId: step.id,
-            stepName: step.name,
-            reasonComponentIds: reason,
-          });
         }
+        affectedSteps.push({
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          stepId: step.id,
+          stepName: step.name,
+          reasonComponentIds: primaryReason,
+          severity,
+        });
       }
     }
 
@@ -175,8 +179,8 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
 
     const directImpactScore = directCount * 12; // higher weight
     const indirectImpactScore = indirectCount * 8; // higher than before
-    const workflowImpactScore = affectedWorkflows.size * 20; // higher weight for workflows
-    const stepImpactScore = affectedSteps.length * 5; // more impacted steps increases score
+    const workflowImpactScore = affectedWorkflows.size * 20; // only error workflows counted
+    const stepImpactScore = affectedSteps.filter(s => s.severity === 'error').length * 5; // count only error steps
     const chainSeverityScore = (avgIndirectDepth * 5) + (maxDepth * 3); // deeper chains are worse
     const breadthSeverityScore = totalImpacted * 2; // broader blast radius is worse
 
@@ -387,14 +391,14 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
               </div>
               <div>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Business Workflows
+                  Business Processes
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Info className="w-3.5 h-3.5 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Počet definovaných workflow (procesních kroků), které mohou být ovlivněny výpadky IT assetů.</p>
+                        <p>Počet definovaných procesů (procesních kroků), které mohou být ovlivněny výpadky IT assetů.</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -430,7 +434,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                           </TooltipTrigger>
                           <TooltipContent>
                             <div className="max-w-xs text-sm">
-                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené workflow, násobeno kritičností IT assetu.
+                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené procesy, násobeno kritičností IT assetu.
                             </div>
                           </TooltipContent>
                         </Tooltip>
@@ -439,7 +443,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                   </TableHead>
                   <TableHead>Risk Level</TableHead>
                   <TableHead>Impacted IT Assets</TableHead>
-                  <TableHead>Affected Workflows</TableHead>
+                  <TableHead>Affected Processes</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -453,7 +457,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                       <div className="font-bold text-2xl text-foreground">{result.businessImpactScore}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={riskColorMap[result.riskLevel]} className="capitalize">
+                      <Badge variant={riskColorMap[result.riskLevel]} className="capitalize text-base px-3.5 py-1.5">
                         {result.riskLevel}
                       </Badge>
                     </TableCell>
@@ -472,12 +476,12 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                     <TableCell>
                       <div className="space-y-1">
                         {result.affectedWorkflows.slice(0, 2).map((workflow, index) => (
-                          <Badge key={index} variant="secondary" className="mr-1 text-xs">
+                          <Badge key={index} variant="secondary" className="mr-1 text-base px-3.5 py-1.5">
                             {workflow}
                           </Badge>
                         ))}
                         {result.affectedWorkflows.length > 2 && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-base px-3.5 py-1.5">
                             +{result.affectedWorkflows.length - 2} more
                           </Badge>
                         )}
@@ -518,20 +522,21 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">Affected Workflows</p>
+                <p className="text-sm font-medium text-foreground">Affected Processes</p>
                 <div className="flex flex-wrap gap-1 mt-2">
                   {detailsFor.affectedWorkflows.length > 0 ? detailsFor.affectedWorkflows.map((w, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{w}</Badge>
+                    <Badge key={i} variant="outline" className="text-base px-3.5 py-1.5">{w}</Badge>
                   )) : <span className="text-xs text-muted-foreground">None</span>}
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">Affected Workflow Steps</p>
+                <p className="text-sm font-medium text-foreground">Affected Process Steps</p>
                 {detailsFor.affectedSteps.length > 0 ? (
                   <div className="mt-2 space-y-2 max-h-60 overflow-auto pr-1">
                     {detailsFor.affectedSteps.map((s, idx) => (
                       <div key={`${s.workflowId}-${s.stepId}-${idx}`} className="text-xs text-foreground">
                         <span className="font-semibold">{s.workflowName}</span> → <span className="italic">{s.stepName}</span>
+                        <span className="ml-1">[{s.severity === 'error' ? 'error' : 'warning'}]</span>
                         <span className="ml-1 text-muted-foreground">(impacted by: {s.reasonComponentIds.map(id => components.find(c => c.id === id)?.name || id).join(', ')})</span>
                       </div>
                     ))}
