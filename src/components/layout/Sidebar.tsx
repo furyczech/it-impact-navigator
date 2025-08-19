@@ -7,7 +7,6 @@ import {
   GitBranch, 
   Settings, 
   BarChart3, 
-  FileText,
   Database,
   Shield,
   ChevronLeft,
@@ -21,7 +20,6 @@ const navigationItems = [
   { icon: GitBranch, label: "Business Processes", id: "workflows" },
   { icon: Shield, label: "Impact Analysis", id: "analysis" },
   { icon: Database, label: "Import/Export", id: "data" },
-  { icon: FileText, label: "Reports", id: "reports" },
   { icon: Settings, label: "Settings", id: "settings" },
 ];
 

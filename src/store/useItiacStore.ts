@@ -46,7 +46,7 @@ interface ItiacState {
   updateWorkflow: (id: string, patch: Partial<Omit<BusinessWorkflow, 'id' | 'lastUpdated'>>) => Promise<BusinessWorkflow | undefined>;
   deleteWorkflow: (id: string) => Promise<void>;
   // bulk operations
-  importData: (data: { components?: any[]; dependencies?: any[] }) => Promise<void>;
+  importData: (data: { components?: any[]; dependencies?: any[]; workflows?: any[] }) => Promise<void>;
   resetAllData: () => Promise<void>;
   loadData: () => Promise<{ components: ITComponent[]; dependencies: ComponentDependency[]; workflows: BusinessWorkflow[] }>;
 }
@@ -344,7 +344,7 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
     }
   },
 
-  importData: async (data: { components?: any[]; dependencies?: any[] }) => {
+  importData: async (data: { components?: any[]; dependencies?: any[]; workflows?: any[] }) => {
     try {
       set({ isLoading: true });
       const now = new Date();
@@ -388,6 +388,31 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
         );
         
         AuditService.logImport('dependencies', 'bulk-import', dependenciesToImport.length);
+      }
+
+      // Import workflows (with steps)
+      if (data.workflows && data.workflows.length > 0) {
+        const workflowsToImport = data.workflows.map(wf => {
+          const { lastUpdated, steps = [], ...rest } = wf || {};
+          return {
+            ...rest,
+            steps,
+            lastUpdated: ensureDate(lastUpdated || now)
+          };
+        });
+        await Promise.all(
+          workflowsToImport.map(wf =>
+            createWorkflowApi({
+              name: wf.name,
+              description: wf.description || '',
+              businessProcess: wf.businessProcess,
+              criticality: wf.criticality,
+              owner: wf.owner || '',
+              steps: wf.steps || []
+            }).catch(console.error)
+          )
+        );
+        AuditService.logImport('workflows', 'bulk-import', workflowsToImport.length);
       }
       
       // Refresh data after import
