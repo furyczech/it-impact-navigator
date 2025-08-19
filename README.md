@@ -1,91 +1,207 @@
 # IT Impact Navigator
 
-Interactive dashboard to manage IT components, visualize dependencies, and analyze business impact of outages.
+Moderní aplikace pro správu IT infrastruktury s analýzou dopadů výpadků na obchodní procesy. Aplikace poskytuje komplexní přehled o IT komponentách, jejich závislostech a potenciálních rizicích.
 
-## Tech Stack
+## Technický stack
 
-- Vite + React + TypeScript
-- shadcn-ui + Tailwind CSS
-- Zustand (state, localStorage persistence)
-- Node/Express backend for JSON persistence (`server/index.js`)
+- **Frontend**: Vite + React 18 + TypeScript
+- **UI Framework**: shadcn/ui + Tailwind CSS (světlý motiv s béžovými akcenty)
+- **State Management**: Zustand s localStorage persistencí
+- **Backend**: Node.js/Express API pro JSON persistenci
+- **Vizualizace**: React Flow pro síťové diagramy
+- **Export**: jsPDF pro PDF reporty, CSV export
 
-## Key Features
+## Klíčové funkce
 
-- Components Management
-  - CRUD, vendor field, search and filters (type, status)
-  - Quick action: Mark as Down/Online directly in the table (button left of name)
-  - Sortable columns (default sort by name)
-  - Export full JSON backup (components, dependencies, workflows)
+### 📊 Dashboard
+- Přehledné KPI karty (celkový počet IT assetů, aktivní závislosti, kritické cesty)
+- System Health Overview s kruhovými metrikami
+- Quick Actions panel pro rychlé operace
+- Historie incidentů ze systémových audit logů
+- Moderní světlý design s béžovými akcenty
 
-- Dependency Network Map
-  - Visualizes component dependencies, supports larger view for readability
+### 🖥️ Správa IT Assetů
+- Kompletní CRUD operace pro IT komponenty
+- Pokročilé filtrování (typ, status, kritičnost)
+- Sortování podle všech sloupců
+- Rychlé přepínání Online/Offline přímo v tabulce
+- Podpora pro vendor, lokaci, vlastníka a metadata
+- Barevné rozlišení kritičnosti (Low/Medium/High/Critical)
 
-- Workflows
-  - Workflow steps support multiple primary components and alternatives
-  - Edit step dialog with prefilled data
+### 🔗 Síť závislostí
+- Interaktivní vizualizace závislostí mezi komponenty
+- Automatické rozvržení pomocí Dagre algoritmu
+- Zoom a pan pro velké sítě
+- Barevné rozlišení typů komponent a stavů
 
-- Impact Analysis Engine
-  - Considers cascading/transitive impacts (direct + indirect)
-  - Shows affected workflows and specific steps with reason components
-  - Business Impact Score weighted by number of dependents, workflows, and chain depth
-  - CSV/PDF export of analysis results
+### 📋 Business procesy (Workflows)
+- Definice obchodních procesů s kroky
+- Podpora pro primární a alternativní komponenty v každém kroku
+- Editace kroků s předvyplněnými daty
+- Mapování procesů na IT infrastrukturu
 
-- Dashboard
-  - Live status header (components count, issues)
-  - System Health Overview and Quick Actions
-  - Incident History sourced from audit logs (status changes with timestamps)
+### ⚡ Engine pro analýzu dopadů
+- Analýza kaskádových dopadů (přímé + nepřímé)
+- Business Impact Score s váženými faktory
+- Identifikace zasažených procesů a konkrétních kroků
+- Risk Level badges konzistentní s barvami kritičnosti
+- Automatické přepočítávání při změnách
+- Export do CSV a PDF reportů
 
-## Project Structure
+## Struktura projektu
 
-- `src/components/` – UI (dashboard, components management, dependencies, workflows, analysis)
-- `src/store/useItiacStore.ts` – Zustand store + audit logging hooks
-- `src/services/auditService.ts` – audit logs in localStorage (used for Incident History)
-- `server/index.js` – Node/Express JSON backend (reads/writes `server/data/data.json`)
+```
+src/
+├── components/
+│   ├── analysis/           # Impact Analysis Engine
+│   ├── components/         # IT Assets Management
+│   ├── dashboard/          # Dashboard komponenty
+│   ├── dependencies/       # Síť závislostí
+│   ├── forms/             # Formuláře (Component, Workflow)
+│   ├── layout/            # Layout komponenty
+│   └── ui/                # shadcn/ui komponenty
+├── services/              # API služby a business logika
+├── store/                 # Zustand store s audit logging
+├── types/                 # TypeScript definice
+└── hooks/                 # React hooks
 
-## Getting Started (Local Development)
+server/
+├── index.js              # Express API server
+└── data/data.json        # JSON databáze
+```
 
-Prereqs: Node.js and npm.
+## Instalace a spuštění
 
-1) Install deps
-```sh
+**Požadavky**: Node.js 18+ a npm
+
+### 1. Instalace závislostí
+```bash
 npm install
 ```
 
-2) Run backend (JSON persistence)
-```sh
-node server/index.js
-# Server runs on http://localhost:4000
+### 2. Spuštění backend serveru
+```bash
+npm run server
+# Server běží na http://localhost:4000
 ```
 
-3) Run frontend
-```sh
+### 3. Spuštění frontend aplikace
+```bash
 npm run dev
-# App runs on http://localhost:5173 (by default)
+# Aplikace běží na http://localhost:5173
 ```
 
-Notes:
-- Frontend persists UI state to localStorage via Zustand.
-- Backend persists full data model to `server/data/data.json` (used for import/export or central storage).
-- Audit logs (for Incident History) are currently kept in browser localStorage.
+### 4. Spuštění obou současně
+```bash
+npm run dev:full
+# Spustí backend i frontend současně
+```
 
-## Data Model
+### Poznámky k persistenci dat
+- **Frontend**: UI stav se ukládá do localStorage přes Zustand
+- **Backend**: Kompletní datový model v `server/data/data.json`
+- **Audit logy**: Historie změn v localStorage (pro Dashboard)
 
-- Components include: `vendor`, `criticality`, `status` (online/offline/warning/maintenance), `location`, `owner`, `metadata`.
-- Dependencies include type and criticality.
-- Workflows include steps, each with multiple primary components and alternatives.
+## Datový model
 
-## Exports & Backups
+### IT Komponenty (ITComponent)
+```typescript
+{
+  id: string
+  name: string
+  type: 'server' | 'database' | 'api' | 'application' | ...
+  status: 'online' | 'offline' | 'warning' | 'maintenance'
+  criticality: 'low' | 'medium' | 'high' | 'critical'
+  vendor?: string
+  location?: string
+  owner?: string
+  description?: string
+  metadata: Record<string, any>
+  lastUpdated: string
+}
+```
 
-- Components Management: Export full JSON backup (components + dependencies + workflows).
-- Impact Analysis: Export CSV and generate PDF report of current results.
+### Závislosti (ComponentDependency)
+```typescript
+{
+  id: string
+  sourceId: string      // komponenta která závisí
+  targetId: string      // komponenta na které závisí
+  type: 'depends_on' | 'uses' | 'connects_to'
+  criticality: 'low' | 'medium' | 'high' | 'critical'
+}
+```
+
+### Business procesy (BusinessWorkflow)
+```typescript
+{
+  id: string
+  name: string
+  description?: string
+  steps: WorkflowStep[]
+}
+
+// WorkflowStep
+{
+  id: string
+  name: string
+  primaryComponentId?: string
+  primaryComponentIds?: string[]
+  alternativeComponentIds?: string[]
+}
+```
+
+## Export a zálohy
+
+- **Kompletní záloha**: JSON export všech dat (komponenty + závislosti + procesy)
+- **Impact Analysis**: CSV export a PDF reporty s výsledky analýzy
+- **Audit logy**: Historie změn pro sledování incidentů
 
 ## Deployment
 
-- Frontend: build with `npm run build` and serve `dist/`.
-- Backend: run `node server/index.js` on your server (ensure write permissions to `server/data/`).
+### Production build
+```bash
+npm run build
+# Vytvoří optimalizovanou verzi v dist/
+```
 
-## Roadmap / Pending
+### Backend deployment
+```bash
+node server/index.js
+# Zajistěte write oprávnění do server/data/
+```
 
-- Additional explanatory tooltips across dashboard and analysis.
-- Enlarged/clearer dependency map details.
-- Optional server-side audit log storage (instead of localStorage).
+## Aktuální stav a vylepšení
+
+### ✅ Dokončeno
+- Světlý motiv s béžovými akcenty
+- Konzistentní barevné schéma pro kritičnost
+- Optimalizované Risk Level badges v Impact Analysis
+- Vylepšené UI komponenty s shadows a hover efekty
+- Automatické přepočítávání analýz
+
+### 🔄 Plánované vylepšení
+- Rozšířené tooltips pro lepší UX
+- Detailnější zobrazení síťových map
+- Server-side audit log storage
+- Pokročilé filtry a vyhledávání
+- Notifikace a alerting systém
+
+## Technické detaily
+
+### Barevné schéma
+- **Kritičnost**: Low (zelená), Medium (žlutá), High (oranžová), Critical (červená)
+- **Status**: Online (zelená), Offline (červená), Warning (žlutá), Maintenance (šedá)
+- **Motiv**: Světlý s béžovými akcenty a subtilními stíny
+
+### Performance optimalizace
+- Lazy loading komponent
+- Memoizace výpočtů v Impact Analysis
+- Optimalizované re-rendery pomocí Zustand
+- Efektivní síťové dotazy s error handling
+
+### Bezpečnost
+- Input validace pomocí Zod
+- XSS ochrana
+- CORS konfigurace
+- Sanitizace exportovaných dat

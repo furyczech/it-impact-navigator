@@ -18,8 +18,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { AlertTriangle, TrendingUp, Shield, Activity, Download, FileText, Info } from "lucide-react";
-import { ExportService } from "@/services/exportService";
+import { AlertTriangle, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -59,24 +58,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
     components.filter(c => c.status !== 'online')
   ), [components]);
   const nonOnlineIds = useMemo(() => new Set(nonOnlineComponents.map(c => c.id)), [nonOnlineComponents]);
-  const filteredDependencies = useMemo(() => (
-    dependencies.filter(dep => nonOnlineIds.has(dep.sourceId) && nonOnlineIds.has(dep.targetId))
-  ), [dependencies, nonOnlineIds]);
-  const affectedWorkflowsByNonOnline = useMemo(() => (
-    workflows.filter(w => 
-      w.steps.some(step => {
-        const primaryIds = [
-          ...(step.primaryComponentId ? [step.primaryComponentId] : []),
-          ...(step.primaryComponentIds || [])
-        ];
-        const anyPrimaryDown = primaryIds.some(id => nonOnlineIds.has(id));
-        if (!anyPrimaryDown) return false;
-        const alts = step.alternativeComponentIds || [];
-        const anyAltOnline = alts.some(aid => components.find(c => c.id === aid)?.status === 'online');
-        return !anyAltOnline; // count only real errors
-      })
-    )
-  ), [workflows, nonOnlineIds, components]);
+  // KPIs removed per request; no derived KPI metrics are computed here
 
   const analyzeImpact = (componentId: string): ImpactResult => {
     const component = components.find(c => c.id === componentId);
@@ -232,25 +214,12 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
   // Removed manual run; results update automatically via useMemo
 
   const riskColorMap = {
-    low: "default",
-    medium: "secondary",
-    high: "destructive", 
-    critical: "destructive"
+    low: "success",
+    medium: "warning",
+    high: "high", 
+    critical: "critical"
   } as const;
 
-  const criticalComponents = useMemo(() => 
-    nonOnlineComponents.filter(c => c.criticality === 'critical'), 
-    [nonOnlineComponents]
-  );
-
-  const singlePointsOfFailure = useMemo(() => {
-    return nonOnlineComponents.filter(component => {
-      const incomingDeps = filteredDependencies.filter(dep => dep.targetId === component.id);
-      const outgoingDeps = filteredDependencies.filter(dep => dep.sourceId === component.id);
-      // Component is SPOF (within non-online subset) if it has many outgoing deps but few incoming (alternatives)
-      return outgoingDeps.length > 2 && incomingDeps.length <= 1;
-    });
-  }, [nonOnlineComponents, filteredDependencies]);
 
   return (
     <div className="space-y-6">
@@ -260,26 +229,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
           <h1 className="text-3xl font-bold text-foreground">Impact Analysis Engine</h1>
           <p className="text-muted-foreground mt-1">Analyze IT asset failure impacts on business processes</p>
         </div>
-        <div className="flex items-center gap-2">
-          {analysisResults.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => ExportService.exportImpactAnalysisResults(analysisResults)}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => ExportService.generatePDFReport(components, dependencies, workflows, analysisResults)}
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                Generate PDF
-              </Button>
-            </>
-          )}
-        </div>
+        <div className="flex items-center gap-2" />
       </div>
 
       {/* Controls */}
@@ -306,109 +256,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
         </CardContent>
       </Card>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Critical IT Assets
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Počet IT assetů s kritičností označenou jako "critical".</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{criticalComponents.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-warning/10 rounded-lg">
-                <Shield className="w-5 h-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Single Points of Failure
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Uzl(y), jejichž selhání pravděpodobně způsobí výpadky více závislých IT assetů (např. mnoho příchozích závislostí nebo vysoká kritičnost).</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{singlePointsOfFailure.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Total Dependencies
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Celkový počet vazeb (hran) mezi IT assety v síti.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{filteredDependencies.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-success/10 rounded-lg">
-                <Activity className="w-5 h-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Business Processes
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Počet definovaných procesů (procesních kroků), které mohou být ovlivněny výpadky IT assetů.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </p>
-                <p className="text-2xl font-bold text-foreground">{affectedWorkflowsByNonOnline.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* KPI cards removed per request */}
 
       {/* Analysis Results */}
       {analysisResults.length > 0 && (
