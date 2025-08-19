@@ -41,12 +41,16 @@ export const Sidebar = ({ currentPage = "dashboard", onNavigate }: SidebarProps)
       {/* Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
         {!isCollapsed && (
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <Network className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-semibold text-foreground"> IT Impact Navigator</span>
-          </div>
+          <a href="/" className="flex items-center space-x-2">
+            <img
+              src="/42FS.jpg"
+              alt="42FS"
+              className="h-8 w-auto rounded-sm shadow-sm"
+              loading="eager"
+              decoding="async"
+            />
+            <span className="text-lg font-semibold text-foreground">IT Impact Navigator</span>
+          </a>
         )}
         <Button
           variant="ghost"

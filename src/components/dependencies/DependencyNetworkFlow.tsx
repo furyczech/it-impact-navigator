@@ -81,13 +81,82 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
     return ds;
   }, [dependencies, filters, filteredComponents]);
 
-  // Compute positions: grouped grid by groupBy
+  // Compute positions
   const computePosition = (index: number, col: number, row: number) => ({
     x: col * 280 + 100,
     y: row * 170 + 50,
   });
 
+  // Build nodes: hierarchical when no grouping, grouped otherwise
   const groupedNodes: Node[] = useMemo(() => {
+    // Helper to create a node with consistent styling
+    const createNode = (component: ITComponent, colIdx: number, rowIdx: number): Node => ({
+      id: component.id,
+      type: 'default',
+      position: computePosition(0, colIdx, rowIdx),
+      data: {
+        label: (
+          <div className="text-center">
+            <div className="font-medium">{component.name}</div>
+            <div className="text-xs text-gray-200/90">{component.type}</div>
+          </div>
+        )
+      },
+      style: {
+        backgroundColor: getComponentColor(component.criticality),
+        color: 'white',
+        border: `2px solid ${getStatusColor(component.status)}`,
+        borderRadius: '10px',
+        padding: '12px',
+        minWidth: '190px',
+        fontSize: '13px',
+      },
+    });
+
+    if (groupBy === 'none') {
+      // Hierarchical layout by dependency depth (source -> target)
+      const compIds = new Set(filteredComponents.map(c => c.id));
+      const edges = filteredDependencies.filter(e => compIds.has(e.sourceId) && compIds.has(e.targetId));
+
+      // Longest-path depth approximation (bounded iterations to handle cycles)
+      const depth: Record<string, number> = {};
+      filteredComponents.forEach(c => { depth[c.id] = 0; });
+      const N = filteredComponents.length;
+      for (let k = 0; k < Math.max(1, Math.min(N, 50)); k++) {
+        let changed = false;
+        for (const e of edges) {
+          const nd = Math.max(depth[e.targetId] ?? 0, (depth[e.sourceId] ?? 0) + 1);
+          if (nd !== (depth[e.targetId] ?? 0)) { depth[e.targetId] = nd; changed = true; }
+        }
+        if (!changed) break;
+      }
+
+      // Normalize depths starting at 0
+      const maxDepth = Object.values(depth).reduce((a, b) => Math.max(a, b), 0);
+      const layerMap: Record<number, ITComponent[]> = {};
+      filteredComponents.forEach(c => {
+        const d = Math.max(0, Math.min(maxDepth, depth[c.id] ?? 0));
+        (layerMap[d] ||= []).push(c);
+      });
+
+      // Optional: stabilize ordering within each layer by criticality then name
+      const critOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 } as any;
+      const nodes: Node[] = [];
+      for (let col = 0; col <= maxDepth; col++) {
+        const list = (layerMap[col] || []).slice().sort((a, b) => {
+          const ca = critOrder[a.criticality] ?? 9;
+          const cb = critOrder[b.criticality] ?? 9;
+          if (ca !== cb) return ca - cb;
+          return a.name.localeCompare(b.name);
+        });
+        list.forEach((component, rowIdx) => {
+          nodes.push(createNode(component, col, rowIdx));
+        });
+      }
+      return nodes;
+    }
+
+    // Grouped grid (by type or criticality)
     const groups: Record<string, ITComponent[]> = {};
     if (groupBy === 'type') {
       filteredComponents.forEach(c => {
@@ -99,8 +168,6 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
         const k = c.criticality;
         (groups[k] ||= []).push(c);
       });
-    } else {
-      groups['all'] = filteredComponents.slice();
     }
 
     const groupKeys = Object.keys(groups);
@@ -108,32 +175,12 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
     groupKeys.forEach((gk, colIdx) => {
       const list = groups[gk];
       list.forEach((component, rowIdx) => {
-        nodes.push({
-          id: component.id,
-          type: 'default',
-          position: computePosition(nodes.length, colIdx, rowIdx),
-          data: {
-            label: (
-              <div className="text-center">
-                <div className="font-medium">{component.name}</div>
-                <div className="text-xs text-gray-200/90">{component.type}</div>
-              </div>
-            )
-          },
-          style: {
-            backgroundColor: getComponentColor(component.criticality),
-            color: 'white',
-            border: `2px solid ${getStatusColor(component.status)}`,
-            borderRadius: '10px',
-            padding: '12px',
-            minWidth: '190px',
-            fontSize: '13px',
-          },
-        });
+        nodes.push(createNode(component, colIdx, rowIdx));
       });
     });
     return nodes;
-  }, [filteredComponents, groupBy]);
+  }, [filteredComponents, filteredDependencies, groupBy]);
+
   const initialNodes: Node[] = groupedNodes;
 
   // Convert dependencies to edges

@@ -34,10 +34,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 
 const criticalityColors = {
-  low: "outline",
-  medium: "default",
-  high: "secondary", 
-  critical: "destructive"
+  low: "success",
+  medium: "warning",
+  high: "high",
+  critical: "critical",
 } as const;
 
 export const WorkflowsManagement = () => {

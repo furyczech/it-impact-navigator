@@ -1,6 +1,5 @@
 import { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
-import { Header } from "./Header";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -13,8 +12,7 @@ export const MainLayout = ({ children, currentPage, onNavigate }: MainLayoutProp
     <div className="min-h-screen bg-background flex">
       <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
       <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6">
+        <main className="flex-1 px-2 md:px-4 py-4 md:py-6 overflow-x-hidden">
           {children}
         </main>
       </div>

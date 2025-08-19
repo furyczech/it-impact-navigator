@@ -16,8 +16,9 @@
     --popover: 224 14% 12%;
     --popover-foreground: 210 40% 95%;
     
-    /* Primary - Deep Technical Blue */
-    --primary: 217 91% 60%;
+    /* Brand Primary - 42FS Navy (from logo) */
+    /* Approx: #0B2A4A => hsl(210 74% 17%) */
+    --primary: 210 74% 17%;
     --primary-foreground: 210 40% 98%;
     
     /* Secondary - Technical Teal */
@@ -28,9 +29,10 @@
     --muted: 224 14% 18%;
     --muted-foreground: 210 20% 65%;
     
-    /* Accent - Bright Highlight */
-    --accent: 217 91% 60%;
-    --accent-foreground: 210 40% 98%;
+    /* Brand Accent - 42FS Gold (divider color in logo) */
+    /* Approx: #F2A900 => hsl(42 100% 47%) */
+    --accent: 42 100% 47%;
+    --accent-foreground: 0 0% 10%;
     
     /* Status Colors */
     --destructive: 0 84% 60%;
@@ -47,19 +49,19 @@
     --critical: 348 83% 47%;
     --critical-foreground: 210 40% 98%;
     
-    /* Network & Connectivity */
-    --network-primary: 217 91% 60%;
-    --network-secondary: 173 58% 39%;
+    /* Network & Connectivity - use brand tints */
+    --network-primary: var(--primary);
+    --network-secondary: var(--accent);
     --network-offline: 0 84% 60%;
     
     /* Interface Elements */
     --border: 224 14% 18%;
     --input: 224 14% 18%;
-    --ring: 217 91% 60%;
+    --ring: var(--primary);
 
-    /* Technical Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
-    --gradient-network: linear-gradient(90deg, hsl(var(--network-primary)), hsl(var(--network-secondary)));
+    /* Brand Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    --gradient-network: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
     --gradient-critical: linear-gradient(135deg, hsl(var(--critical)), hsl(var(--destructive)));
     
     /* Technical Effects */
@@ -73,6 +75,83 @@
     
     --radius: 0.5rem;
   }
+}
+
+/* Wider variant for primary action buttons */
+.uiv-glow-wide {
+  padding: 12px 28px; /* wider look */
+}
+
+ 
+
+/* Wrapper to avoid layout shift when the button expands on hover */
+.uiv-delete-wrap {
+  width: 50px;            /* reserve only the circle's footprint */
+  height: 50px;           /* match button height */
+  flex: 0 0 50px;         /* prevent flex growth/shrink */
+  position: relative;     /* containing block for absolute button */
+  display: block;
+  overflow: visible;      /* allow the button to visually overflow */
+}
+
+/* Uiverse.io inspired Delete button (namespaced) */
+.uiv-delete-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: rgb(20, 20, 20);
+  border: none;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.164);
+  cursor: pointer;
+  transition-duration: .3s;
+  overflow: hidden;
+  position: absolute;     /* avoid contributing to layout width */
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.uiv-delete-icon {
+  width: 12px;
+  transition-duration: .3s;
+}
+
+.uiv-delete-icon path {
+  fill: white;
+}
+
+.uiv-delete-btn:hover {
+  width: 140px;
+  border-radius: 50px;
+  transition-duration: .3s;
+  background-color: rgb(255, 69, 69);
+  align-items: center;
+}
+
+.uiv-delete-btn:hover .uiv-delete-icon {
+  width: 50px;
+  transition-duration: .3s;
+  transform: translateY(60%);
+}
+
+.uiv-delete-btn::before {
+  position: absolute;
+  top: -20px;
+  content: "Delete";
+  color: white;
+  transition-duration: .3s;
+  font-size: 2px;
+}
+
+.uiv-delete-btn:hover::before {
+  font-size: 13px;
+  opacity: 1;
+  transform: translateY(30px);
+  transition-duration: .3s;
 }
 
 @layer base {
@@ -135,4 +214,66 @@
 
 .switch input[type="checkbox"] {
   display: none;
+}
+
+/* Uiverse.io by zjssun — Glow Buttons (namespaced) */
+.uiv-glow-btn {
+  padding: 10px 20px;
+  text-transform: uppercase;
+  border-radius: 8px;
+  font-size: 15px; /* slightly smaller to fit table */
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-shadow: none;
+  background: transparent;
+  cursor: pointer;
+  box-shadow: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: 0.3s ease; /* slightly faster in tables */
+  user-select: none;
+}
+
+/* Brand (Edit) — uses theme tokens */
+.uiv-glow-blue:hover,
+.uiv-glow-blue:focus {
+  color: #ffffff;
+  background: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary));
+  text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 20px #ffffff;
+  box-shadow:
+    0 0 5px hsl(var(--primary)),
+    0 0 20px hsl(var(--primary)),
+    0 0 50px hsl(var(--accent)),
+    0 0 100px hsl(var(--accent));
+}
+
+/* Red (Delete) */
+.uiv-glow-red:hover,
+.uiv-glow-red:focus {
+  color: #ffffff;
+  background: #ff4545;
+  border: 1px solid #ff4545;
+  text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 20px #ffffff;
+  box-shadow: 0 0 5px #ff4545, 0 0 20px #ff4545, 0 0 50px #ff4545, 0 0 100px #ff4545;
+}
+
+/* Tighten table edges for IT Assets table */
+.table-edge-tight th,
+.table-edge-tight td {
+  padding-left: 0.5rem !important;  /* tighten default px-4/p-4 */
+  padding-right: 0.5rem !important;
+}
+.table-edge-tight thead th:first-child,
+.table-edge-tight tbody td:first-child {
+  padding-left: 0.5rem;    /* small, consistent inset on the left */
+}
+.table-edge-tight thead th:last-child,
+.table-edge-tight tbody td:last-child {
+  padding-right: 0.5rem !important;   /* small right inset so buttons aren't glued */
+}
+
+/* Remove browser default table spacing */
+.table-collapse {
+  border-collapse: collapse;
+  border-spacing: 0;
 }

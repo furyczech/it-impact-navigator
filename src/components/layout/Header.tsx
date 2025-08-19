@@ -19,7 +19,7 @@ export const Header = () => {
         </h1>
         <Badge
           variant={isOperational ? "secondary" : "destructive"}
-          className={isOperational ? "bg-success text-success-foreground" : ""}
+          className={(isOperational ? "bg-success text-success-foreground " : "") + "text-base px-4 py-2"}
         >
           {isOperational ? "System Operational" : "Degraded"}
         </Badge>

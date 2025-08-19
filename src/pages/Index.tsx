@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
+import { EnhancedDashboard } from "@/components/dashboard/EnhancedDashboard";
 import { ComponentsManagement } from "@/components/components/ComponentsManagement";
 import { DependenciesVisualization } from "@/components/dependencies/DependenciesVisualization";
 import { WorkflowsManagement } from "@/components/workflows/WorkflowsManagement";
@@ -22,7 +23,7 @@ const Index = () => {
   const renderContent = () => {
     switch (currentPage) {
       case "dashboard":
-        return <DashboardOverview onQuickNav={handleNavigation} />;
+        return <EnhancedDashboard onQuickNav={handleNavigation} />;
       case "components":
         return <ComponentsManagement />;
       case "dependencies":

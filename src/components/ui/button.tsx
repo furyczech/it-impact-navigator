@@ -18,6 +18,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        neumorphic:
+          "text-[#0a0a0a] bg-[#ececec] border border-[#e3e3e3] rounded-[0.5em] transition-all duration-300 shadow-[3px_3px_6px_#cfcfcf,-3px_-3px_6px_#ffffff] active:text-[#666666] active:shadow-[inset_3px_3px_6px_#d0d0d0,inset_-3px_-3px_6px_#ffffff]",
       },
       size: {
         default: "h-10 px-4 py-2",

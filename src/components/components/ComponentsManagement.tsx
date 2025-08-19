@@ -4,7 +4,6 @@ import { ITComponent } from "@/types/itiac";
 import { ComponentForm } from "@/components/forms/ComponentForm";
 import { ExportService } from "@/services/exportService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { 
@@ -56,17 +55,17 @@ const componentIcons = {
 } as const;
 
 const statusColors = {
-  online: "default",
+  online: "success",
   offline: "destructive", 
   warning: "secondary",
   maintenance: "outline"
 } as const;
 
 const criticalityColors = {
-  low: "outline",
-  medium: "default",
-  high: "secondary", 
-  critical: "destructive"
+  low: "success",
+  medium: "warning",
+  high: "high",
+  critical: "critical",
 } as const;
 
 export const ComponentsManagement = () => {
@@ -135,14 +134,16 @@ export const ComponentsManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">IT Assets Management</h1>
           <p className="text-muted-foreground mt-1">Manage IT assets and their configurations</p>
         </div>
-        <div className="flex space-x-2">
-          <Button onClick={() => setIsDialogOpen(true)} className="bg-gradient-primary hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" />
+        <div className="flex space-x-2 w-[140px]">
+          <button
+            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base"
+            title="Add IT Asset"
+            aria-label="Add IT Asset"
+            onClick={() => setIsDialogOpen(true)}
+          >
+            <Plus className="w-5 h-5 mr-2" />
             Add IT Asset
-          </Button>
-          <Button variant="outline" onClick={() => ExportService.exportFullBackup(components, dependencies, workflows)}>
-            Export JSON
-          </Button>
+          </button>
         </div>
         
         <ComponentForm
@@ -246,14 +247,14 @@ export const ComponentsManagement = () => {
 
       {/* IT Assets Table */}
       <Card className="bg-card border-border shadow-depth">
-        <CardHeader>
+        <CardHeader className="px-0">
           <CardTitle className="flex items-center space-x-2">
             <Server className="w-5 h-5 text-primary" />
             <span>IT Assets ({filteredComponents.length})</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
+        <CardContent className="px-0">
+          <Table className="w-full table-edge-tight table-collapse">
             <TableHeader>
               <TableRow>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('name')}>IT Asset{sortIndicator('name')}</TableHead>
@@ -264,7 +265,7 @@ export const ComponentsManagement = () => {
                 <TableHead className="cursor-pointer" onClick={() => headerSort('vendor')}>Vendor{sortIndicator('vendor')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('owner')}>Owner{sortIndicator('owner')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => headerSort('lastUpdated')}>Last Updated{sortIndicator('lastUpdated')}</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[140px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -297,18 +298,18 @@ export const ComponentsManagement = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
+                    <TableCell className="text-base">
+                      <Badge variant="outline" className="capitalize text-base px-3.5 py-1.5">
                         {component.type.replace('-', ' ')}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={statusColors[component.status]} className="capitalize">
+                    <TableCell className="text-base">
+                      <Badge variant={statusColors[component.status]} className="capitalize text-lg px-4 py-2">
                         {component.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={criticalityColors[component.criticality]} className="capitalize">
+                    <TableCell className="text-base">
+                      <Badge variant={criticalityColors[component.criticality]} className="capitalize text-base px-3.5 py-1.5">
                         {component.criticality}
                       </Badge>
                     </TableCell>
@@ -318,26 +319,27 @@ export const ComponentsManagement = () => {
                     <TableCell className="text-muted-foreground">
                       {new Date(component.lastUpdated as any).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                    <TableCell className="w-[140px]">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="uiv-glow-btn uiv-glow-blue"
+                          title="Edit"
+                          aria-label={`Edit ${component.name}`}
                           onClick={() => {
                             setEditingComponent(component);
                             setIsDialogOpen(true);
                           }}
                         >
                           Edit
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        </button>
+                        <button
+                          className="uiv-glow-btn uiv-glow-red ml-2"
+                          title="Delete"
+                          aria-label={`Delete ${component.name}`}
                           onClick={() => deleteComponent(component.id)}
-                          className="text-destructive hover:text-destructive"
                         >
                           Delete
-                        </Button>
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
