@@ -64,6 +64,21 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
 
     const svgRef = React.useRef<SVGSVGElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const [viewport, setViewport] = React.useState<{width: number; height: number}>({ width: 600, height: 400 });
+
+    // Observe container size to keep SVG responsive
+    React.useEffect(() => {
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const cr = entry.contentRect;
+          setViewport({ width: Math.max(400, cr.width), height: Math.max(300, cr.height) });
+        }
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
 
     // Filter components based on active filters
     const filteredComponents = React.useMemo(() => {
@@ -86,25 +101,93 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
     // Create nodes and connections
     const { nodes, connections } = React.useMemo(() => {
       const nodeMap = new Map<string, Node>();
-      const width = 600;
-      const height = 400;
+      const width = viewport.width;
+      const height = viewport.height;
       const centerX = width / 2;
       const centerY = height / 2;
       
-      // Create nodes with circular layout
-      filteredComponents.forEach((component, index) => {
-        const angle = (index / filteredComponents.length) * 2 * Math.PI;
-        const radius = Math.min(width, height) * 0.3;
-        
-        const node: Node = {
-          id: component.id,
-          component,
-          x: centerX + Math.cos(angle) * radius,
-          y: centerY + Math.sin(angle) * radius,
-          connections: []
-        };
-        
-        nodeMap.set(component.id, node);
+      // Build undirected adjacency to understand connectivity
+      const adj = new Map<string, Set<string>>();
+      filteredComponents.forEach(c => adj.set(c.id, new Set<string>()));
+      dependencies.forEach(dep => {
+        if (adj.has(dep.sourceId) && adj.has(dep.targetId)) {
+          adj.get(dep.sourceId)!.add(dep.targetId);
+          adj.get(dep.targetId)!.add(dep.sourceId);
+        }
+      });
+
+      // Order components so connected nodes appear near each other
+      const visited = new Set<string>();
+      const orderedComponents: ITComponent[] = [];
+      const byId = new Map(filteredComponents.map(c => [c.id, c] as const));
+      // Helper to pick next seed: highest degree unvisited
+      const pickSeed = () => {
+        let best: string | null = null;
+        let bestDeg = -1;
+        for (const c of filteredComponents) {
+          if (visited.has(c.id)) continue;
+          const deg = adj.get(c.id)?.size ?? 0;
+          if (deg > bestDeg) { bestDeg = deg; best = c.id; }
+        }
+        return best;
+      };
+      // BFS from seed to cluster connected nodes
+      while (visited.size < filteredComponents.length) {
+        const seed = pickSeed();
+        if (!seed) break;
+        const q: string[] = [seed];
+        visited.add(seed);
+        while (q.length) {
+          const cur = q.shift()!;
+          const comp = byId.get(cur);
+          if (comp) orderedComponents.push(comp);
+          const nbrs = Array.from(adj.get(cur) ?? []);
+          // Sort neighbors by degree desc to place hubs earlier
+          nbrs.sort((a, b) => (adj.get(b)?.size ?? 0) - (adj.get(a)?.size ?? 0));
+          for (const nb of nbrs) {
+            if (!visited.has(nb)) { visited.add(nb); q.push(nb); }
+          }
+        }
+      }
+      // Include any isolated nodes that might have been missed
+      if (orderedComponents.length < filteredComponents.length) {
+        const seen = new Set(orderedComponents.map(c => c.id));
+        filteredComponents.forEach(c => { if (!seen.has(c.id)) orderedComponents.push(c); });
+      }
+
+      // Multi-ring radial layout; fill rings in BFS order
+      const n = orderedComponents.length;
+      const ringCount = n <= 12 ? 1 : n <= 36 ? 2 : n <= 80 ? 3 : 4;
+      const perRingBase = Math.ceil(n / ringCount);
+      const rings: ITComponent[][] = [];
+      for (let r = 0; r < ringCount; r++) rings.push([]);
+      orderedComponents.forEach((component, idx) => {
+        // Distribute in order to keep related nodes contiguous
+        const r = Math.floor(idx / perRingBase);
+        const ringIndex = Math.min(r, ringCount - 1);
+        rings[ringIndex].push(component);
+      });
+
+      const minDim = Math.min(width, height);
+      const innerRadius = Math.max(60, minDim * 0.18);
+      const outerRadius = Math.max(innerRadius + 40, minDim * 0.42);
+      const ringRadius = (ri: number) => innerRadius + (ri * (outerRadius - innerRadius)) / Math.max(1, ringCount - 1);
+
+      rings.forEach((ring, ri) => {
+        const R = ringRadius(ri);
+        const perRing = Math.max(1, ring.length);
+        ring.forEach((component, i) => {
+          const angle = (i / perRing) * 2 * Math.PI;
+          const x = centerX + Math.cos(angle) * R;
+          const y = centerY + Math.sin(angle) * R;
+          nodeMap.set(component.id, {
+            id: component.id,
+            component,
+            x,
+            y,
+            connections: []
+          });
+        });
       });
 
       // Create connections
@@ -130,7 +213,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
         nodes: Array.from(nodeMap.values()),
         connections: connectionList
       };
-    }, [filteredComponents, dependencies]);
+    }, [filteredComponents, dependencies, viewport]);
 
     // Build impacted set: any node that depends (directly or transitively) on an offline node
     const impactedIds = React.useMemo(() => {
@@ -221,7 +304,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
     };
 
     const handleZoomIn = () => setZoom(prev => Math.min(prev * 1.2, 3));
-    const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.2, 0.5));
+    const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.2, 0.3));
     const handleResetView = () => {
       setZoom(1);
       setPan({ x: 0, y: 0 });
@@ -291,13 +374,13 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
           </div>
           <div 
             ref={containerRef}
-            className="relative w-full h-96 bg-background/50 rounded-lg border border-border overflow-hidden"
+            className="relative w-full h-[60vh] bg-background/50 rounded-lg border border-border overflow-hidden"
           >
             <svg
               ref={svgRef}
               width="100%"
               height="100%"
-              viewBox={`${-pan.x} ${-pan.y} ${600 / zoom} ${400 / zoom}`}
+              viewBox={`${-pan.x} ${-pan.y} ${Math.max(300, viewport.width) / zoom} ${Math.max(200, viewport.height) / zoom}`}
               className="cursor-grab active:cursor-grabbing"
             >
               {/* Grid background */}
@@ -311,6 +394,16 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                     opacity="0.1"
                   />
                 </pattern>
+                {/* Arrowheads for directed dependencies */}
+                <marker id="arrow-muted" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M 0 0 L 6 3 L 0 6 z" fill="hsl(var(--muted-foreground))" />
+                </marker>
+                <marker id="arrow-impact" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M 0 0 L 6 3 L 0 6 z" fill="hsl(var(--primary))" />
+                </marker>
+                <marker id="arrow-critical" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M 0 0 L 6 3 L 0 6 z" fill="hsl(var(--destructive))" />
+                </marker>
               </defs>
               <rect width="100%" height="100%" fill="url(#topology-grid)" />
               
@@ -319,16 +412,46 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                 const fromOffline = connection.from.component.status === 'offline';
                 const toImpacted = impactedIds.has(connection.to.id);
                 const isImpactPath = fromOffline && toImpacted;
+                const isCritical = connection.dependency.criticality === "critical";
+                const strokeColor = isImpactPath ? "hsl(var(--primary))" : (isCritical ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground))");
+                const markerId = isImpactPath ? 'arrow-impact' : (isCritical ? 'arrow-critical' : 'arrow-muted');
+
+                // Shorten line to node edges so arrowhead isn't under the target circle
+                const manyNodes = nodes.length > 40;
+                const radiusFor = (nodeId: string) => {
+                  const isSel = selectedNode === nodeId;
+                  const isHov = hoveredNode === nodeId;
+                  if (isSel || isHov) return manyNodes ? 18 : 25;
+                  return manyNodes ? 14 : 20;
+                };
+                const rFrom = radiusFor(connection.from.id);
+                const rTo = radiusFor(connection.to.id);
+                const pad = 3; // small padding so arrow sits just off the circle edge
+                const x1c = connection.from.x;
+                const y1c = connection.from.y;
+                const x2c = connection.to.x;
+                const y2c = connection.to.y;
+                const dx = x2c - x1c;
+                const dy = y2c - y1c;
+                const len = Math.hypot(dx, dy) || 1;
+                const ux = dx / len;
+                const uy = dy / len;
+                const x1 = x1c + ux * (rFrom + pad);
+                const y1 = y1c + uy * (rFrom + pad);
+                const x2 = x2c - ux * (rTo + pad + 6); // a bit extra so arrowhead clears the circle
+                const y2 = y2c - uy * (rTo + pad + 6);
+
                 return (
                   <line
                     key={connection.id}
-                    x1={connection.from.x}
-                    y1={connection.from.y}
-                    x2={connection.to.x}
-                    y2={connection.to.y}
-                    stroke={isImpactPath ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
-                    strokeWidth={connection.dependency.criticality === "critical" ? 2 : 1}
-                    strokeDasharray={connection.dependency.criticality === "critical" ? "none" : "5,5"}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke={strokeColor}
+                    markerEnd={`url(#${markerId})`}
+                    strokeWidth={isCritical ? 2 : 1}
+                    strokeDasharray={isCritical ? "none" : "5,5"}
                     opacity={selectedNode && 
                       selectedNode !== connection.from.id && 
                       selectedNode !== connection.to.id ? 0.3 : 0.7}
@@ -344,6 +467,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                 const isSelected = selectedNode === node.id;
                 const isHovered = hoveredNode === node.id;
                 const isConnected = selectedNode && node.connections.includes(selectedNode);
+                const manyNodes = nodes.length > 40;
                 const displayStatus = node.component.status === 'offline'
                   ? 'offline'
                   : (impactedIds.has(node.id) ? 'impacted' : node.component.status);
@@ -354,7 +478,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                     <circle
                       cx={node.x}
                       cy={node.y}
-                      r={isSelected || isHovered ? 25 : 20}
+                      r={isSelected || isHovered ? (manyNodes ? 18 : 25) : (manyNodes ? 14 : 20)}
                       fill={getStatusColor(displayStatus)}
                       stroke="hsl(var(--background))"
                       strokeWidth={getCriticalityStrokeWidth(node.component.criticality)}
@@ -367,25 +491,25 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                     
                     {/* Node icon */}
                     <foreignObject
-                      x={node.x - 8}
-                      y={node.y - 8}
-                      width="16"
-                      height="16"
+                      x={node.x - (manyNodes ? 6 : 8)}
+                      y={node.y - (manyNodes ? 6 : 8)}
+                      width={manyNodes ? 12 : 16}
+                      height={manyNodes ? 12 : 16}
                       className="pointer-events-none"
                     >
-                      <Icon className="w-4 h-4 text-background" />
+                      <Icon className={manyNodes ? "w-3 h-3 text-background" : "w-4 h-4 text-background"} />
                     </foreignObject>
                     
-                    {/* Node label */}
+                    {/* Node label (always visible) */}
                     <text
                       x={node.x}
-                      y={node.y + 35}
+                      y={node.y + (manyNodes ? 26 : 35)}
                       textAnchor="middle"
-                      className="text-xs fill-foreground font-medium pointer-events-none"
+                      className="text-[10px] md:text-xs fill-foreground font-medium pointer-events-none"
                       opacity={selectedNode && !isSelected && !isConnected ? 0.5 : 1}
                     >
-                      {node.component.name.length > 12 
-                        ? `${node.component.name.substring(0, 12)}...` 
+                      {node.component.name.length > (manyNodes ? 10 : 12)
+                        ? `${node.component.name.substring(0, manyNodes ? 10 : 12)}...`
                         : node.component.name}
                     </text>
                   </g>

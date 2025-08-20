@@ -9,7 +9,9 @@ import {
   CheckCircle, 
   Clock, 
   ExternalLink,
-  LucideIcon 
+  LucideIcon,
+  ChevronRight,
+  ChevronDown 
 } from "lucide-react";
 
 export interface Alert {
@@ -22,6 +24,7 @@ export interface Alert {
   criticality?: string;
   acknowledged?: boolean;
   actionUrl?: string;
+  impactedComponents?: string[];
 }
 
 export interface AlertPanelProps {
@@ -97,6 +100,16 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       }
     };
 
+    // Map asset criticality (e.g., High/Medium/Low) to badge variants
+    const getCriticalityBadgeVariant = (criticality?: string) => {
+      if (!criticality) return "secondary" as const;
+      const c = criticality.trim().toLowerCase();
+      if (c === "high" || c === "critical") return "destructive" as const;
+      if (c === "medium") return "warning" as const;
+      if (c === "low") return "secondary" as const;
+      return "secondary" as const;
+    };
+
     const formatTimeAgo = (timestamp: Date) => {
       const diff = Date.now() - timestamp.getTime();
       const minutes = Math.floor(diff / 60000);
@@ -111,9 +124,84 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       return `${days}d ago`;
     };
 
-    const visibleAlerts = alerts.slice(0, maxVisible);
+    // Remove redundant leading phrases like: "The medium asset 'XYZ'" → "XYZ"
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const sanitizeMessage = (alert: Alert) => {
+      let msg = alert.message || "";
+      const levels = "critical|medium|high|low";
+      if (alert.component) {
+        const name = escapeRegExp(alert.component);
+        const re = new RegExp(`^\\s*(The\\s+)?(${levels})\\s+asset\\s+["'“”]?${name}["'“”]?\\s*`, 'i');
+        const m = msg.match(re);
+        if (m) {
+          return `${alert.component} ${msg.slice(m[0].length).trimStart()}`;
+        }
+      }
+      // Fallback: strip just the leading "The <level> asset" phrase
+      const re2 = new RegExp(`^\\s*(The\\s+)?(${levels})\\s+asset\\s+`, 'i');
+      return msg.replace(re2, '').trimStart();
+    };
+
+    // Reorder alerts: place impacted children right after their root alert
+    const impactedRe = /^impacted-by-(offline|warning)-(.+?)-(.+)$/;
+    const isRootAlert = (a: Alert) => a.id.startsWith('offline-') || a.id.startsWith('warning-');
+    const getRootIdFromImpacted = (a: Alert): string | null => {
+      const m = a.id.match(impactedRe);
+      return m ? m[2] : null;
+    };
+    const getRootKeyFromRootAlert = (a: Alert): string | null => {
+      if (!isRootAlert(a)) return null;
+      return a.id.replace(/^\w+-/, '');
+    };
+
+    const childrenByRoot = new Map<string, Alert[]>();
+    const others: Alert[] = [];
+    alerts.forEach(a => {
+      const rootId = getRootIdFromImpacted(a);
+      if (rootId) {
+        const arr = childrenByRoot.get(rootId) || [];
+        arr.push(a);
+        childrenByRoot.set(rootId, arr);
+      } else {
+        others.push(a);
+      }
+    });
+
+    const visibleAlerts: Array<{ alert: Alert; isChild: boolean }> = [];
+    // First pass: add roots with their children
+    others.forEach(a => {
+      if (isRootAlert(a)) {
+        const rootId = getRootKeyFromRootAlert(a)!;
+        visibleAlerts.push({ alert: a, isChild: false });
+        const kids = childrenByRoot.get(rootId);
+        if (kids && kids.length) {
+          kids.forEach(k => visibleAlerts.push({ alert: k, isChild: true }));
+          childrenByRoot.delete(rootId);
+        }
+      }
+    });
+    // Second pass: add non-root, non-impacted alerts
+    others.forEach(a => {
+      if (!isRootAlert(a)) {
+        visibleAlerts.push({ alert: a, isChild: false });
+      }
+    });
+    // Finally, add any impacted whose root alert isn't present (fallback)
+    childrenByRoot.forEach(kids => {
+      kids.forEach(k => visibleAlerts.push({ alert: k, isChild: false }));
+    });
     const criticalCount = alerts.filter(a => a.severity === "critical").length;
     const warningCount = alerts.filter(a => a.severity === "warning").length;
+
+    // Expansion state for root alerts
+    const [expandedRoots, setExpandedRoots] = React.useState<Set<string>>(new Set());
+    const toggleRoot = (rootKey: string) => {
+      setExpandedRoots(prev => {
+        const next = new Set(prev);
+        if (next.has(rootKey)) next.delete(rootKey); else next.add(rootKey);
+        return next;
+      });
+    };
 
     return (
       <Card ref={ref} className={cn("bg-card border-border shadow-depth", className)} {...props}>
@@ -157,15 +245,22 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
         
         <CardContent className="pt-0">
           {visibleAlerts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <CheckCircle className="w-8 h-8 mx-auto mb-2 text-success" />
+            <div className="h-[60vh] flex flex-col items-center justify-center text-muted-foreground">
+              <CheckCircle className="w-8 h-8 mb-2 text-success" />
               <p>All systems operational</p>
               <p className="text-xs mt-1">No active alerts</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {visibleAlerts.map((alert) => {
+            <div className="space-y-3 h-[60vh] overflow-y-auto pr-1">
+              {visibleAlerts.map(({ alert, isChild }) => {
                 const SeverityIcon = getSeverityIcon(alert.severity);
+                const rootKey = isChild
+                  ? (getRootIdFromImpacted(alert) || '')
+                  : (getRootKeyFromRootAlert(alert) || '');
+                // Hide children unless their root is expanded
+                if (isChild && rootKey && !expandedRoots.has(rootKey)) {
+                  return null;
+                }
                 
                 return (
                   <div
@@ -175,12 +270,26 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                       alert.acknowledged 
                         ? "bg-muted/30 border-muted" 
                         : "bg-background border-border hover:bg-accent/10",
-                      onAlertClick && "cursor-pointer"
+                      !isChild && "cursor-pointer",
+                      isChild && "ml-6 border-l-2"
                     )}
-                    onClick={() => onAlertClick?.(alert)}
+                    onClick={() => {
+                      if (!isChild && rootKey) {
+                        toggleRoot(rootKey);
+                      } else {
+                        onAlertClick?.(alert);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1">
+                      <div className={cn("flex items-start space-x-3 flex-1", isChild && "pl-3") }>
+                        {!isChild && rootKey && (
+                          expandedRoots.has(rootKey) ? (
+                            <ChevronDown className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                          )
+                        )}
                         <SeverityIcon className={cn("w-4 h-4 mt-0.5", getSeverityColor(alert.severity))} />
                         
                         <div className="flex-1 min-w-0">
@@ -188,25 +297,39 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                             <p className="font-medium text-foreground text-sm truncate">
                               {alert.title}
                             </p>
-                            <Badge 
-                              variant={getSeverityBadgeVariant(alert.severity)}
-                              className="text-xs px-1.5 py-0.5"
-                            >
-                              {alert.severity}
-                            </Badge>
-                            {alert.criticality && alert.criticality.toLowerCase() !== alert.severity.toLowerCase() && (
-                              <Badge 
-                                variant="outline" 
-                                className="text-[10px] px-1.5 py-0.5 capitalize"
-                              >
-                                {alert.criticality}
-                              </Badge>
-                            )}
+                            {/* Removed impacted badge as requested */}
+                            {(() => {
+                              const crit = alert.criticality?.trim();
+                              const label = crit ? crit : alert.severity;
+                              const variant = crit 
+                                ? getCriticalityBadgeVariant(crit)
+                                : getSeverityBadgeVariant(alert.severity);
+                              return (
+                                <Badge 
+                                  variant={variant}
+                                  className="text-xs px-1.5 py-0.5 capitalize"
+                                >
+                                  {label}
+                                </Badge>
+                              );
+                            })()}
                           </div>
                           
                           <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                            {alert.message}
+                            {sanitizeMessage(alert)}
                           </p>
+                          {/* Removed impacted subtitle; details visible when expanded */}
+                          {alert.impactedComponents && alert.impactedComponents.length > 0 && (
+                            <div className="text-[11px] text-muted-foreground mb-1">
+                              <span className="font-medium">Impacted:</span>{' '}
+                              {(() => {
+                                const max = 5;
+                                const shown = alert.impactedComponents.slice(0, max).join(', ');
+                                const more = alert.impactedComponents.length - max;
+                                return more > 0 ? `${shown} +${more} more` : shown;
+                              })()}
+                            </div>
+                          )}
                           
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2 text-xs text-muted-foreground">
@@ -239,14 +362,6 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                   </div>
                 );
               })}
-              
-              {alerts.length > maxVisible && (
-                <div className="text-center pt-2">
-                  <Button variant="ghost" size="sm" className="text-xs">
-                    View {alerts.length - maxVisible} more alerts
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </CardContent>

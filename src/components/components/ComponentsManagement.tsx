@@ -78,11 +78,47 @@ export const ComponentsManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [impactedOnly, setImpactedOnly] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
   const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [headerElevated, setHeaderElevated] = useState(false);
+
+  // Compute impacted components from current offline roots (downstream propagation only)
+  const impactedIds = (() => {
+    const forward = new Map<string, string[]>(); // source -> [targets]
+    dependencies.forEach(dep => {
+      const arrFwd = forward.get(dep.sourceId) || [];
+      arrFwd.push(dep.targetId);
+      forward.set(dep.sourceId, arrFwd);
+    });
+    const traverseForward = (start: string) => {
+      const out: string[] = [];
+      const visited = new Set<string>([start]);
+      const stack = [start];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        const nexts = forward.get(cur) || [];
+        for (const nxt of nexts) {
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            out.push(nxt);
+            stack.push(nxt);
+          }
+        }
+      }
+      return out;
+    };
+    const roots = components.filter(c => c.status === 'offline').map(c => c.id);
+    const impacted = new Set<string>();
+    for (const id of roots) {
+      const list = traverseForward(id);
+      list.forEach(x => impacted.add(x));
+    }
+    roots.forEach(id => impacted.delete(id));
+    return impacted;
+  })();
 
   const filteredComponents = components.filter(component => {
     const q = searchTerm.toLowerCase();
@@ -91,8 +127,9 @@ export const ComponentsManagement = () => {
                          component.vendor?.toLowerCase().includes(q);
     const matchesType = filterType === "all" || component.type === filterType;
     const matchesStatus = filterStatus === "all" || component.status === filterStatus;
+    const matchesImpacted = !impactedOnly || impactedIds.has(component.id) || component.status === 'offline';
     
-    return matchesSearch && matchesType && matchesStatus;
+    return matchesSearch && matchesType && matchesStatus && matchesImpacted;
   });
 
   const sortedComponents = [...filteredComponents].sort((a, b) => {
@@ -242,6 +279,14 @@ export const ComponentsManagement = () => {
                 <SelectItem value="maintenance">Maintenance</SelectItem>
               </SelectContent>
             </Select>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={impactedOnly}
+                onChange={(e) => setImpactedOnly(e.target.checked)}
+              />
+              Impacted only
+            </label>
           </div>
         </CardContent>
       </Card>
@@ -352,9 +397,17 @@ export const ComponentsManagement = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-base">
-                      <Badge variant={statusColors[component.status]} className="capitalize text-lg px-4 py-2">
-                        {component.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={statusColors[component.status]} className="capitalize text-lg px-4 py-2">
+                          {component.status}
+                        </Badge>
+                        {impactedIds.has(component.id) && component.status === 'online' && (
+                          <Badge variant="warning" className="text-xs px-2 py-0.5">Impacted</Badge>
+                        )}
+                        {impactedOnly && component.status === 'offline' && (
+                          <Badge variant="destructive" className="text-xs px-2 py-0.5">Root</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-base">
                       <Badge variant={criticalityColors[component.criticality]} className="capitalize text-base px-3.5 py-1.5">

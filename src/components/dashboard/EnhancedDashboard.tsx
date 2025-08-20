@@ -62,12 +62,54 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   const offlineCount = components.filter(c => c.status === 'offline').length;
   const maintenanceCount = components.filter(c => c.status === 'maintenance').length;
 
+  // Derive cascading impact: downstream-only (source -> target)
+  const computeImpactedFromOfflines = (): Set<string> => {
+    // Build forward map only
+    const forward = new Map<string, string[]>(); // source -> [targets]
+    dependencies.forEach(dep => {
+      const arrFwd = forward.get(dep.sourceId) || [];
+      arrFwd.push(dep.targetId);
+      forward.set(dep.sourceId, arrFwd);
+    });
+    const traverseForward = (start: string) => {
+      const out: string[] = [];
+      const visited = new Set<string>([start]);
+      const stack = [start];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        const nexts = forward.get(cur) || [];
+        for (const nxt of nexts) {
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            out.push(nxt);
+            stack.push(nxt);
+          }
+        }
+      }
+      return out;
+    };
+
+    const roots = components.filter(c => c.status === 'offline').map(c => c.id);
+    const impacted = new Set<string>();
+    for (const id of roots) {
+      const list = traverseForward(id);
+      list.forEach(x => impacted.add(x));
+    }
+    // exclude the roots themselves; they are already offline
+    roots.forEach(id => impacted.delete(id));
+    return impacted;
+  };
+
+  const impactedFromOfflines = computeImpactedFromOfflines();
+  const effectiveOnlineCount = components.filter(c => c.status === 'online' && !impactedFromOfflines.has(c.id)).length;
+  const effectiveOfflineCount = components.filter(c => c.status === 'offline' || impactedFromOfflines.has(c.id)).length;
+
   const totalDependencies = dependencies.length;
   const criticalPaths = dependencies.filter(d => d.criticality === 'critical').length;
   const totalWorkflows = workflows.length;
   const uniqueBusinessProcesses = Array.from(new Set(workflows.map(w => w.businessProcess))).length;
 
-  const networkHealth = totalComponents > 0 ? ((onlineCount / totalComponents) * 100) : 0;
+  const networkHealth = totalComponents > 0 ? ((effectiveOnlineCount / totalComponents) * 100) : 0;
   // Business impact KPI removed from UI
 
   // Generate health trend from audit logs: percent of assets Online at each time bucket
@@ -88,28 +130,65 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
     // Sort each list ascending by time
     logsByComp.forEach(list => list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
+    // Pre-build forward dependency map for cascade computation (static over time window)
+    const forward = new Map<string, string[]>();
+    dependencies.forEach(dep => {
+      const arr = forward.get(dep.sourceId) || [];
+      arr.push(dep.targetId);
+      forward.set(dep.sourceId, arr);
+    });
+    const cascadeFrom = (roots: string[]) => {
+      const impacted = new Set<string>();
+      const visited = new Set<string>(roots);
+      const stack = [...roots];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        const nexts = forward.get(cur) || [];
+        for (const nxt of nexts) {
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            impacted.add(nxt);
+            stack.push(nxt);
+          }
+        }
+      }
+      // exclude roots themselves
+      roots.forEach(r => impacted.delete(r));
+      return impacted;
+    };
+
     for (let i = hours; i >= 0; i--) {
       const ts = new Date(now.getTime() - i * 60 * 60 * 1000);
       const hourStart = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate(), ts.getHours(), 0, 0, 0);
 
       // Determine status at this time per component by last change before ts
-      let onlineAtTime = 0;
+      const statusAtTime = new Map<string, string>();
       components.forEach(c => {
         const compLogs = logsByComp.get(c.id) || [];
         // find last log <= ts
-        let statusAtTime: any = undefined;
+        let s: any = undefined;
         for (let idx = compLogs.length - 1; idx >= 0; idx--) {
           const lg = compLogs[idx];
           if (lg.timestamp <= ts) {
-            statusAtTime = lg.changes?.after?.status ?? lg.details?.status;
+            s = lg.changes?.after?.status ?? lg.details?.status;
             break;
           }
         }
-        const status = (statusAtTime as string) || 'online';
-        if (status === 'online') onlineAtTime += 1;
+        statusAtTime.set(c.id, (s as string) || 'online');
       });
 
-      const health = totalComponents > 0 ? (onlineAtTime / totalComponents) * 100 : 0;
+      // Roots for cascade are offline assets at this time
+      const offlineRoots = components.filter(c => statusAtTime.get(c.id) === 'offline').map(c => c.id);
+      const impacted = cascadeFrom(offlineRoots);
+
+      // Count effective online excluding impacted
+      let effectiveOnlineAtTime = 0;
+      components.forEach(c => {
+        const s = statusAtTime.get(c.id) || 'online';
+        if (s === 'online' && !impacted.has(c.id)) effectiveOnlineAtTime += 1;
+      });
+
+      const health = totalComponents > 0 ? (effectiveOnlineAtTime / totalComponents) * 100 : 0;
       data.push({
         timestamp: hourStart.toISOString(),
         value: Math.round(health * 10) / 10,
@@ -127,9 +206,72 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
     const alerts: Alert[] = [];
     const recentLogs = AuditService.getLogs(50, 'COMPONENT', 'UPDATE');
     
+    // Build forward dependency map (downstream only)
+    const forward = new Map<string, string[]>(); // source -> [targets]
+    dependencies.forEach(dep => {
+      const arrFwd = forward.get(dep.sourceId) || [];
+      arrFwd.push(dep.targetId);
+      forward.set(dep.sourceId, arrFwd);
+    });
+
+    const traverse = (start: string, map: Map<string,string[]>) => {
+      const out: string[] = [];
+      const visited = new Set<string>([start]);
+      const stack = [start];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        const nexts = map.get(cur) || [];
+        for (const nxt of nexts) {
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            out.push(nxt);
+            stack.push(nxt);
+          }
+        }
+      }
+      return out;
+    };
+
+    const bfsImpactMap = (start: string, map: Map<string, string[]>) => {
+      const out: Map<string, { causeId: string; depth: number }> = new Map();
+      const visited = new Set<string>([start]);
+      const stack = [{ id: start, depth: 0 }];
+      while (stack.length) {
+        const { id, depth } = stack.pop()!;
+        const nexts = map.get(id) || [];
+        for (const nxt of nexts) {
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            out.set(nxt, { causeId: id, depth });
+            stack.push({ id: nxt, depth: depth + 1 });
+          }
+        }
+      }
+      return out;
+    };
+
+    const getImpactedComponentIds = (rootId: string): string[] => {
+      // Downstream only
+      const fwd = traverse(rootId, forward);
+      return Array.from(new Set(fwd));
+    };
+
+    // Get detailed impact map: impacted id -> immediate cause id (downstream only)
+    const getImpactCauseMap = (rootId: string): Map<string, { causeId: string; depth: number }> => {
+      return bfsImpactMap(rootId, forward);
+    };
+
     // Critical alerts for offline components
     const offlineComponents = components.filter(c => c.status === 'offline');
     offlineComponents.forEach(comp => {
+      const impactMap = getImpactCauseMap(comp.id);
+      const impactedIds = Array.from(impactMap.keys());
+      const impactedNames = Array.from(new Set(
+        impactedIds
+          .filter(id => id !== comp.id)
+          .map(id => components.find(c => c.id === id)?.name)
+          .filter((n): n is string => !!n)
+      ));
       alerts.push({
         id: `offline-${comp.id}`,
         title: `${comp.name} Offline`,
@@ -138,13 +280,41 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
         timestamp: new Date(comp.lastUpdated),
         component: comp.name,
         criticality: comp.criticality,
-        actionUrl: `#components/${comp.id}`
+        actionUrl: `#components/${comp.id}`,
+        impactedComponents: impactedNames
+      });
+
+      // Add individual impacted alerts as if they were directly offline, with reason
+      impactedIds.forEach(id => {
+        if (id === comp.id) return;
+        const impactedComp = components.find(c => c.id === id);
+        if (!impactedComp) return;
+        const causeId = impactMap.get(id)?.causeId;
+        const causeComp = causeId ? components.find(c => c.id === causeId) : undefined;
+        alerts.push({
+          id: `impacted-by-offline-${comp.id}-${id}`,
+          title: `${impactedComp.name} Impacted`,
+          message: `${impactedComp.name} is impacted by ${causeComp?.name || comp.name} outage`,
+          severity: "critical",
+          timestamp: new Date(),
+          component: impactedComp.name,
+          criticality: impactedComp.criticality,
+          actionUrl: `#components/${impactedComp.id}`
+        });
       });
     });
     
     // Warning alerts for components with warnings
     const warningComponents = components.filter(c => c.status === 'warning');
     warningComponents.forEach(comp => {
+      const impactMap = getImpactCauseMap(comp.id);
+      const impactedIds = Array.from(impactMap.keys());
+      const impactedNames = Array.from(new Set(
+        impactedIds
+          .filter(id => id !== comp.id)
+          .map(id => components.find(c => c.id === id)?.name)
+          .filter((n): n is string => !!n)
+      ));
       alerts.push({
         id: `warning-${comp.id}`,
         title: `${comp.name} Performance Issue`,
@@ -153,7 +323,27 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
         timestamp: new Date(comp.lastUpdated),
         component: comp.name,
         criticality: comp.criticality,
-        actionUrl: `#components/${comp.id}`
+        actionUrl: `#components/${comp.id}`,
+        impactedComponents: impactedNames
+      });
+
+      // Add individual impacted alerts for degraded performance
+      impactedIds.forEach(id => {
+        if (id === comp.id) return;
+        const impactedComp = components.find(c => c.id === id);
+        if (!impactedComp) return;
+        const causeId = impactMap.get(id)?.causeId;
+        const causeComp = causeId ? components.find(c => c.id === causeId) : undefined;
+        alerts.push({
+          id: `impacted-by-warning-${comp.id}-${id}`,
+          title: `${impactedComp.name} Impacted`,
+          message: `${impactedComp.name} performance impacted by ${causeComp?.name || comp.name}`,
+          severity: "warning",
+          timestamp: new Date(),
+          component: impactedComp.name,
+          criticality: impactedComp.criticality,
+          actionUrl: `#components/${impactedComp.id}`
+        });
       });
     });
     
@@ -302,11 +492,11 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
         
         <TrendCard
           title="IT Assets"
-          value={`${onlineCount}/${totalComponents}`}
-          trend={onlineCount === totalComponents ? "up" : offlineCount > 0 ? "down" : "stable"}
-          change={onlineCount === totalComponents ? "All Online" : `${offlineCount} Offline`}
+          value={`${effectiveOnlineCount}/${totalComponents}`}
+          trend={effectiveOnlineCount === totalComponents ? "up" : effectiveOfflineCount > 0 ? "down" : "stable"}
+          change={effectiveOnlineCount === totalComponents ? "All Online" : `${effectiveOfflineCount} Offline (incl. impacted)`}
           icon={Server}
-          variant={onlineCount === totalComponents ? "success" : offlineCount > 0 ? "destructive" : "warning"}
+          variant={effectiveOnlineCount === totalComponents ? "success" : effectiveOfflineCount > 0 ? "destructive" : "warning"}
           interactive
           onDrillDown={() => onQuickNav?.("components")}
         />
@@ -337,10 +527,6 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
                 dependencyId: dependency.id 
               });
               onQuickNav?.("dependencies");
-            }}
-            filters={{
-              status: offlineCount > 0 ? ['online', 'warning', 'offline'] : undefined,
-              criticality: criticalPaths > 0 ? ['critical', 'high'] : undefined
             }}
           />
         </div>

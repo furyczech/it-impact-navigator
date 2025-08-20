@@ -169,94 +169,133 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
         // Fallback to internal if libs are not present
         console.warn(`[DependencyNetworkFlow] ${layoutEngine} not installed. Falling back to internal layout.`);
       }
-      // Hierarchical layout by dependency depth (source -> target)
+
+      // Build undirected connected components to cluster related assets together
       const compIds = new Set(filteredComponents.map(c => c.id));
       const edges = filteredDependencies.filter(e => compIds.has(e.sourceId) && compIds.has(e.targetId));
+      const undirectedAdj = new Map<string, Set<string>>();
+      const ensure = (id: string) => { if (!undirectedAdj.has(id)) undirectedAdj.set(id, new Set()); return undirectedAdj.get(id)!; };
+      filteredComponents.forEach(c => ensure(c.id));
+      edges.forEach(e => { ensure(e.sourceId).add(e.targetId); ensure(e.targetId).add(e.sourceId); });
 
-      // Longest-path depth approximation (bounded iterations to handle cycles)
-      const depth: Record<string, number> = {};
-      filteredComponents.forEach(c => { depth[c.id] = 0; });
-      const N = filteredComponents.length;
-      for (let k = 0; k < Math.max(1, Math.min(N, 50)); k++) {
-        let changed = false;
-        for (const e of edges) {
-          const nd = Math.max(depth[e.targetId] ?? 0, (depth[e.sourceId] ?? 0) + 1);
-          if (nd !== (depth[e.targetId] ?? 0)) { depth[e.targetId] = nd; changed = true; }
+      const visited = new Set<string>();
+      const componentsCC: string[][] = [];
+      for (const id of compIds) {
+        if (visited.has(id)) continue;
+        const queue: string[] = [id];
+        visited.add(id);
+        const cc: string[] = [];
+        while (queue.length) {
+          const cur = queue.shift()!;
+          cc.push(cur);
+          for (const nb of (undirectedAdj.get(cur) || [])) {
+            if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+          }
         }
-        if (!changed) break;
+        componentsCC.push(cc);
       }
+      // Sort clusters by size (largest first) for better use of space
+      componentsCC.sort((a, b) => b.length - a.length);
 
-      // Normalize depths starting at 0
-      const maxDepth = Object.values(depth).reduce((a, b) => Math.max(a, b), 0);
-      const layers: ITComponent[][] = Array.from({ length: maxDepth + 1 }, () => []);
-      filteredComponents.forEach(c => {
-        const d = Math.max(0, Math.min(maxDepth, depth[c.id] ?? 0));
-        layers[d].push(c);
-      });
+      // Helper: criticality order for tie-breakers
+      const critOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 } as any;
 
-      // Barycentric ordering to reduce crossings
-      const idToIndexInLayer: Record<string, number> = {};
-      layers.forEach((layer, d) => {
-        layer.sort((a, b) => a.name.localeCompare(b.name));
-        layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
-      });
-
-      const predecessors = (id: string) => edges
-        .filter(e => e.targetId === id)
-        .map(e => e.sourceId)
-        .filter(src => (depth[src] ?? 0) === (depth[id] ?? 0) - 1);
-
-      const successors = (id: string) => edges
-        .filter(e => e.sourceId === id)
-        .map(e => e.targetId)
-        .filter(tgt => (depth[tgt] ?? 0) === (depth[id] ?? 0) + 1);
-
-      const averageIndex = (ids: string[]) => {
-        if (!ids.length) return Number.POSITIVE_INFINITY;
-        const s = ids.reduce((acc, nid) => acc + (idToIndexInLayer[nid] ?? 0), 0);
-        return s / ids.length;
-      };
-
-      // Left-to-right sweep (by depth increasing): order by predecessors
-      for (let d = 1; d <= maxDepth; d++) {
-        const layer = layers[d];
-        layer.sort((a, b) => {
-          const av = averageIndex(predecessors(a.id));
-          const bv = averageIndex(predecessors(b.id));
-          if (av !== bv) return av - bv;
-          // tie-break by criticality then name
-          const critOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 } as any;
-          const ca = critOrder[a.criticality] ?? 9;
-          const cb = critOrder[b.criticality] ?? 9;
-          if (ca !== cb) return ca - cb;
-          return a.name.localeCompare(b.name);
-        });
-        layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
-      }
-
-      // Right-to-left sweep: order by successors
-      for (let d = maxDepth - 1; d >= 0; d--) {
-        const layer = layers[d];
-        layer.sort((a, b) => {
-          const av = averageIndex(successors(a.id));
-          const bv = averageIndex(successors(b.id));
-          if (av !== bv) return av - bv;
-          const critOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 } as any;
-          const ca = critOrder[a.criticality] ?? 9;
-          const cb = critOrder[b.criticality] ?? 9;
-          if (ca !== cb) return ca - cb;
-          return a.name.localeCompare(b.name);
-        });
-        layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
-      }
-
-      // Build nodes using final ordering
+      // Layout each cluster independently and place with column offsets
       const nodes: Node[] = [];
-      for (let col = 0; col <= maxDepth; col++) {
-        const layer = layers[col];
-        layer.forEach((component, rowIdx) => {
-          nodes.push(createNode(component, col, rowIdx, direction));
+      let colBase = 0; // shift columns between clusters
+      const CLUSTER_PAD_COLS = 1; // one empty column between clusters
+
+      for (const cc of componentsCC) {
+        // Subset edges within this cluster
+        const ccSet = new Set(cc);
+        const eCC = edges.filter(e => ccSet.has(e.sourceId) && ccSet.has(e.targetId));
+
+        // Depth by longest-path approximation within cluster
+        const depth: Record<string, number> = {};
+        cc.forEach(id => { depth[id] = 0; });
+        const N = cc.length;
+        for (let k = 0; k < Math.max(1, Math.min(N, 50)); k++) {
+          let changed = false;
+          for (const e of eCC) {
+            const nd = Math.max(depth[e.targetId] ?? 0, (depth[e.sourceId] ?? 0) + 1);
+            if (nd !== (depth[e.targetId] ?? 0)) { depth[e.targetId] = nd; changed = true; }
+          }
+          if (!changed) break;
+        }
+
+        // Layers within this cluster
+        const maxDepth = cc.reduce((m, id) => Math.max(m, depth[id] ?? 0), 0);
+        const layers: ITComponent[][] = Array.from({ length: maxDepth + 1 }, () => []);
+        cc.forEach(id => {
+          const comp = filteredComponents.find(c => c.id === id)!;
+          const d = Math.max(0, Math.min(maxDepth, depth[id] ?? 0));
+          layers[d].push(comp);
         });
+
+        // Barycentric ordering to reduce crossings (predecessors/successors within cluster)
+        const idToIndexInLayer: Record<string, number> = {};
+        layers.forEach((layer) => {
+          layer.sort((a, b) => a.name.localeCompare(b.name));
+          layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
+        });
+
+        const predecessors = (id: string) => eCC
+          .filter(e => e.targetId === id)
+          .map(e => e.sourceId)
+          .filter(src => (depth[src] ?? 0) === (depth[id] ?? 0) - 1);
+
+        const successors = (id: string) => eCC
+          .filter(e => e.sourceId === id)
+          .map(e => e.targetId)
+          .filter(tgt => (depth[tgt] ?? 0) === (depth[id] ?? 0) + 1);
+
+        const averageIndex = (ids: string[]) => {
+          if (!ids.length) return Number.POSITIVE_INFINITY;
+          const s = ids.reduce((acc, nid) => acc + (idToIndexInLayer[nid] ?? 0), 0);
+          return s / ids.length;
+        };
+
+        // Left-to-right sweep (by depth increasing): order by predecessors
+        for (let d = 1; d <= maxDepth; d++) {
+          const layer = layers[d];
+          layer.sort((a, b) => {
+            const av = averageIndex(predecessors(a.id));
+            const bv = averageIndex(predecessors(b.id));
+            if (av !== bv) return av - bv;
+            // tie-break by criticality then name
+            const ca = critOrder[a.criticality] ?? 9;
+            const cb = critOrder[b.criticality] ?? 9;
+            if (ca !== cb) return ca - cb;
+            return a.name.localeCompare(b.name);
+          });
+          layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
+        }
+
+        // Right-to-left sweep: order by successors
+        for (let d = maxDepth - 1; d >= 0; d--) {
+          const layer = layers[d];
+          layer.sort((a, b) => {
+            const av = averageIndex(successors(a.id));
+            const bv = averageIndex(successors(b.id));
+            if (av !== bv) return av - bv;
+            const ca = critOrder[a.criticality] ?? 9;
+            const cb = critOrder[b.criticality] ?? 9;
+            if (ca !== cb) return ca - cb;
+            return a.name.localeCompare(b.name);
+          });
+          layer.forEach((c, i) => { idToIndexInLayer[c.id] = i; });
+        }
+
+        // Emit nodes with cluster column offset
+        for (let col = 0; col <= maxDepth; col++) {
+          const layer = layers[col];
+          layer.forEach((component, rowIdx) => {
+            nodes.push(createNode(component, colBase + col, rowIdx, direction));
+          });
+        }
+
+        // Advance base by cluster width + padding
+        colBase += (maxDepth + 1) + CLUSTER_PAD_COLS;
       }
       return nodes;
     }
