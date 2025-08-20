@@ -43,6 +43,7 @@ interface ImpactResult {
     stepName: string;
     reasonComponentIds: string[]; // components that caused the impact
     severity: 'warning' | 'error';
+    alternativeIds?: string[]; // alternative components that kept the process running
   }[];
   businessImpactScore: number;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -128,10 +129,11 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
           ...(step.primaryComponentIds || [])
         ];
         const altIds = step.alternativeComponentIds || [];
-        const primaryReason = primaryIds.filter(id => impactedSet.has(id));
+        const primaryReasonRaw = primaryIds.filter(id => impactedSet.has(id));
+        const primaryReason = Array.from(new Set(primaryReasonRaw));
         if (primaryReason.length === 0) continue; // primary unaffected
-        const anyAltOnline = altIds.some(aid => components.find(c => c.id === aid)?.status === 'online');
-        const severity: 'warning' | 'error' = anyAltOnline ? 'warning' : 'error';
+        const altOnlineIds = altIds.filter(aid => components.find(c => c.id === aid)?.status === 'online');
+        const severity: 'warning' | 'error' = altOnlineIds.length > 0 ? 'warning' : 'error';
         if (severity === 'error') {
           affectedWorkflows.add(workflow.name);
         }
@@ -142,6 +144,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
           stepName: step.name,
           reasonComponentIds: primaryReason,
           severity,
+          alternativeIds: altOnlineIds.length > 0 ? altOnlineIds : undefined,
         });
       }
     }
@@ -386,6 +389,9 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
                         <span className="font-semibold">{s.workflowName}</span> → <span className="italic">{s.stepName}</span>
                         <span className="ml-1">[{s.severity === 'error' ? 'error' : 'warning'}]</span>
                         <span className="ml-1 text-muted-foreground">(impacted by: {s.reasonComponentIds.map(id => components.find(c => c.id === id)?.name || id).join(', ')})</span>
+                        {s.severity === 'warning' && s.alternativeIds && s.alternativeIds.length > 0 && (
+                          <span className="ml-1 text-muted-foreground">, alternative: {s.alternativeIds.map(id => components.find(c => c.id === id)?.name || id).join(', ')}</span>
+                        )}
                       </div>
                     ))}
                   </div>

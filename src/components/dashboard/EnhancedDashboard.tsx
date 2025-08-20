@@ -201,29 +201,19 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
     });
   };
 
-  // Manage alerts locally to support ack and dismiss
-  const [activeAlerts, setActiveAlerts] = useState<Alert[]>(() => {
-    try {
-      const dismissed = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]') as string[];
-      return generateRealAlerts().filter(a => !dismissed.includes(a.id));
-    } catch {
-      return generateRealAlerts();
-    }
-  });
+  // Manage alerts locally (ignore previous dismiss/ack so all show again)
+  const [activeAlerts, setActiveAlerts] = useState<Alert[]>(() => generateRealAlerts());
 
-  // Refresh alerts when data changes
+  // Clear previously persisted dismissals so old hidden alerts reappear
   useEffect(() => {
     try {
-      const dismissed = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]') as string[];
-      const alerts = generateRealAlerts().filter(a => !dismissed.includes(a.id));
-      setActiveAlerts(prev => {
-        // try to preserve acknowledged flags
-        const acked = new Set(prev.filter(p => p.acknowledged).map(p => p.id));
-        return alerts.map(a => ({ ...a, acknowledged: acked.has(a.id) }));
-      });
-    } catch {
-      setActiveAlerts(generateRealAlerts());
-    }
+      localStorage.removeItem('dismissedAlerts');
+    } catch {}
+  }, []);
+
+  // Refresh alerts when data changes (no filtering/preservation)
+  useEffect(() => {
+    setActiveAlerts(generateRealAlerts());
   }, [components, dependencies, workflows, lastRefresh]);
 
   const handleAlertClick = (alert: Alert) => {
@@ -469,12 +459,6 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
                 
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Workflows:</span>
-                  <span className="font-medium">{totalWorkflows}</span>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Globe className="w-4 h-4 text-primary" />
                   <span className="text-muted-foreground">Processes:</span>
                   <span className="font-medium">{uniqueBusinessProcesses}</span>
                 </div>

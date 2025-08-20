@@ -8,7 +8,6 @@ import {
   AlertCircle, 
   CheckCircle, 
   Clock, 
-  X,
   ExternalLink,
   LucideIcon 
 } from "lucide-react";
@@ -195,7 +194,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                             >
                               {alert.severity}
                             </Badge>
-                            {alert.criticality && (
+                            {alert.criticality && alert.criticality.toLowerCase() !== alert.severity.toLowerCase() && (
                               <Badge 
                                 variant="outline" 
                                 className="text-[10px] px-1.5 py-0.5 capitalize"
@@ -230,34 +229,6 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                                   }}
                                 >
                                   <ExternalLink className="w-3 h-3" />
-                                </Button>
-                              )}
-                              
-                              {onAlertAcknowledge && !alert.acknowledged && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-2 text-xs"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAlertAcknowledge(alert.id);
-                                  }}
-                                >
-                                  Ack
-                                </Button>
-                              )}
-                              
-                              {onAlertDismiss && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAlertDismiss(alert.id);
-                                  }}
-                                >
-                                  <X className="w-3 h-3" />
                                 </Button>
                               )}
                             </div>
