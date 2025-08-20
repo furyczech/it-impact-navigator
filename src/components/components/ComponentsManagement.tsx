@@ -82,6 +82,7 @@ export const ComponentsManagement = () => {
   const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
   const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
+  const [headerElevated, setHeaderElevated] = useState(false);
 
   const filteredComponents = components.filter(component => {
     const q = searchTerm.toLowerCase();
@@ -247,25 +248,72 @@ export const ComponentsManagement = () => {
 
       {/* IT Assets Table */}
       <Card className="bg-card border-border shadow-depth">
-        <CardHeader className="px-0">
+        <CardHeader className="pl-4 pr-0">
           <CardTitle className="flex items-center space-x-2">
             <Server className="w-5 h-5 text-primary" />
             <span>IT Assets ({filteredComponents.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-0">
+          <div
+            className="h-[70vh] overflow-auto"
+            onScroll={(e) => {
+              const scrolled = (e.target as HTMLDivElement).scrollTop > 0;
+              if (scrolled !== headerElevated) setHeaderElevated(scrolled);
+            }}
+          >
           <Table className="w-full table-edge-tight table-collapse">
             <TableHeader>
               <TableRow>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('name')}>IT Asset{sortIndicator('name')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('type')}>Type{sortIndicator('type')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('status')}>Status{sortIndicator('status')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('criticality')}>Criticality{sortIndicator('criticality')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('location')}>Location{sortIndicator('location')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('vendor')}>Vendor{sortIndicator('vendor')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('owner')}>Owner{sortIndicator('owner')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => headerSort('lastUpdated')}>Last Updated{sortIndicator('lastUpdated')}</TableHead>
-                <TableHead className="w-[140px]">Actions</TableHead>
+                <TableHead
+                  className={`cursor-pointer w-[420px] sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('name')}
+                >
+                  IT Asset{sortIndicator('name')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('type')}
+                >
+                  Type{sortIndicator('type')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('status')}
+                >
+                  Status{sortIndicator('status')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('criticality')}
+                >
+                  Criticality{sortIndicator('criticality')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('location')}
+                >
+                  Location{sortIndicator('location')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('vendor')}
+                >
+                  Vendor{sortIndicator('vendor')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('owner')}
+                >
+                  Owner{sortIndicator('owner')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('lastUpdated')}
+                >
+                  Last Updated{sortIndicator('lastUpdated')}
+                </TableHead>
+                <TableHead className={`w-[140px] sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -273,7 +321,7 @@ export const ComponentsManagement = () => {
                 const Icon = componentIcons[component.type];
                 return (
                   <TableRow key={component.id}>
-                    <TableCell>
+                    <TableCell className="w-[420px]">
                       <div className="flex items-center gap-3">
                         <div className="shrink-0">
                           <label className="switch" title={component.status === 'offline' ? 'Bring Online' : 'Mark as Down (offline)'}>
@@ -292,7 +340,7 @@ export const ComponentsManagement = () => {
                         <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                           <Icon className="w-4 h-4 text-primary" />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 max-w-[420px]">
                           <div className="font-medium text-foreground truncate">{component.name}</div>
                           <div className="text-sm text-muted-foreground truncate">{component.description}</div>
                         </div>
@@ -347,6 +395,7 @@ export const ComponentsManagement = () => {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
