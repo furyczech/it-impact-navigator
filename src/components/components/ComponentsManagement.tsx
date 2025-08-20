@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { ITComponent } from "@/types/itiac";
+import { computeImpactedFromOfflines, buildForwardMap } from "@/lib/utils";
 import { ComponentForm } from "@/components/forms/ComponentForm";
 import { ExportService } from "@/services/exportService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,46 +80,75 @@ export const ComponentsManagement = () => {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [impactedOnly, setImpactedOnly] = useState<boolean>(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
   const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [headerElevated, setHeaderElevated] = useState(false);
 
-  // Compute impacted components from current offline roots (downstream propagation only)
-  const impactedIds = (() => {
-    const forward = new Map<string, string[]>(); // source -> [targets]
-    dependencies.forEach(dep => {
-      const arrFwd = forward.get(dep.sourceId) || [];
-      arrFwd.push(dep.targetId);
-      forward.set(dep.sourceId, arrFwd);
-    });
-    const traverseForward = (start: string) => {
-      const out: string[] = [];
-      const visited = new Set<string>([start]);
-      const stack = [start];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        const nexts = forward.get(cur) || [];
+  // Parse hash parameters for pre-filters e.g. #components?impacted=1&focus=<id>
+  useEffect(() => {
+    try {
+      const hash = window.location.hash || '';
+      if (hash.startsWith('#components')) {
+        const q = hash.split('?')[1] || '';
+        const params = new URLSearchParams(q);
+        const impacted = params.get('impacted');
+        const root = params.get('root');
+        const focus = params.get('focus');
+        if (impacted === '1') setImpactedOnly(true);
+        if (root) {
+          // Optionally restrict by root by setting searchTerm to root name
+          const rc = components.find(c => c.id === root);
+          if (rc) setSearchTerm(rc.name);
+        }
+        if (focus) setFocusId(focus);
+      }
+    } catch {}
+  }, [components]);
+
+  // Scroll focused row into view when set by deep link
+  useEffect(() => {
+    try {
+      if (focusId) {
+        const el = document.getElementById(`row-${focusId}`);
+        if (el) el.scrollIntoView({ block: 'center' });
+      }
+    } catch {}
+  }, [focusId]);
+
+  // Compute impacted components via shared downstream-only utility
+  const impactedIds = computeImpactedFromOfflines(components, dependencies);
+
+  // Build immediate cause map for impacted components from offline roots
+  const impactCauseMap = useMemo(() => {
+    const map = new Map<string, { causeId: string; depth: number }>();
+    const forward = buildForwardMap(dependencies);
+    const offlineRoots = components.filter(c => c.status === 'offline').map(c => c.id);
+    const visitedGlobal = new Set<string>();
+    for (const root of offlineRoots) {
+      const visited = new Set<string>([root]);
+      const queue: Array<{ id: string; depth: number }> = [{ id: root, depth: 0 }];
+      while (queue.length) {
+        const { id, depth } = queue.shift()!;
+        const nexts = forward.get(id) || [];
         for (const nxt of nexts) {
           if (!visited.has(nxt)) {
             visited.add(nxt);
-            out.push(nxt);
-            stack.push(nxt);
+            // Only set if not set, or if this path is shallower
+            const prev = map.get(nxt);
+            if (!prev || depth + 1 < prev.depth) {
+              map.set(nxt, { causeId: id, depth: depth + 1 });
+            }
+            if (!visitedGlobal.has(nxt)) queue.push({ id: nxt, depth: depth + 1 });
           }
         }
       }
-      return out;
-    };
-    const roots = components.filter(c => c.status === 'offline').map(c => c.id);
-    const impacted = new Set<string>();
-    for (const id of roots) {
-      const list = traverseForward(id);
-      list.forEach(x => impacted.add(x));
+      offlineRoots.forEach(r => visitedGlobal.add(r));
     }
-    roots.forEach(id => impacted.delete(id));
-    return impacted;
-  })();
+    return map;
+  }, [components, dependencies]);
 
   const filteredComponents = components.filter(component => {
     const q = searchTerm.toLowerCase();
@@ -358,14 +388,16 @@ export const ComponentsManagement = () => {
                 >
                   Last Updated{sortIndicator('lastUpdated')}
                 </TableHead>
-                <TableHead className={`w-[140px] sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedComponents.map((component) => {
                 const Icon = componentIcons[component.type];
+                const impacted = impactedIds.has(component.id) && component.status === 'online';
+                const causeId = impactCauseMap.get(component.id)?.causeId;
+                const causeName = causeId ? components.find(c => c.id === causeId)?.name : undefined;
                 return (
-                  <TableRow key={component.id}>
+                  <TableRow key={component.id} id={`row-${component.id}`}>
                     <TableCell className="w-[420px]">
                       <div className="flex items-center gap-3">
                         <div className="shrink-0">
@@ -401,8 +433,14 @@ export const ComponentsManagement = () => {
                         <Badge variant={statusColors[component.status]} className="capitalize text-lg px-4 py-2">
                           {component.status}
                         </Badge>
-                        {impactedIds.has(component.id) && component.status === 'online' && (
-                          <Badge variant="warning" className="text-xs px-2 py-0.5">Impacted</Badge>
+                        {impacted && (
+                          <Badge 
+                            variant="warning" 
+                            className="text-xs px-2 py-0.5" 
+                            title={causeName ? `Impacted by ${causeName}` : 'Impacted by downstream outage'}
+                          >
+                            Impacted
+                          </Badge>
                         )}
                         {impactedOnly && component.status === 'offline' && (
                           <Badge variant="destructive" className="text-xs px-2 py-0.5">Root</Badge>

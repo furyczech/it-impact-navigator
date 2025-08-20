@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import { Position } from '@xyflow/react';
 import { ITComponent, ComponentDependency } from '@/types/itiac';
+import { computeImpactedFromOfflines } from '@/lib/utils';
 
 interface DependencyNetworkFlowProps {
   components: ITComponent[];
@@ -95,31 +96,10 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
     return ds;
   }, [dependencies, filters, filteredComponents]);
 
-  // Compute impacted nodes (propagation from offline sources along source->target edges)
+  // Compute impacted nodes via shared downstream-only utility
   const impactedIds = useMemo(() => {
-    const offlineIds = new Set(filteredComponents.filter(c => c.status === 'offline').map(c => c.id));
-    if (offlineIds.size === 0) return new Set<string>();
-    const adj = new Map<string, string[]>();
-    filteredDependencies.forEach(dep => {
-      if (!adj.has(dep.sourceId)) adj.set(dep.sourceId, []);
-      adj.get(dep.sourceId)!.push(dep.targetId);
-    });
-    const impacted = new Set<string>();
-    const queue: string[] = Array.from(offlineIds);
-    const visited = new Set<string>();
-    while (queue.length) {
-      const cur = queue.shift()!;
-      if (visited.has(cur)) continue;
-      visited.add(cur);
-      const nbrs = adj.get(cur) || [];
-      for (const nb of nbrs) {
-        if (!offlineIds.has(nb)) {
-          impacted.add(nb);
-          queue.push(nb);
-        }
-      }
-    }
-    return impacted;
+    const visible = new Set(filteredComponents.map(c => c.id));
+    return computeImpactedFromOfflines(filteredComponents, filteredDependencies, visible);
   }, [filteredComponents, filteredDependencies]);
 
   // Spacing constants (larger Y-gap to reduce overlaps)

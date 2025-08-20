@@ -2,7 +2,7 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, computeImpactedFromOfflines, buildForwardMap, traverseDownstream } from "@/lib/utils";
 import { ITComponent, ComponentDependency } from "@/types/itiac";
 import { 
   Network, 
@@ -58,6 +58,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
   }, ref) => {
     const [selectedNode, setSelectedNode] = React.useState<string | null>(null);
     const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
+    const [hoverHighlight, setHoverHighlight] = React.useState<Set<string>>(new Set());
     const [zoom, setZoom] = React.useState(1);
     const [pan, setPan] = React.useState({ x: 0, y: 0 });
     const [showFilters, setShowFilters] = React.useState(false);
@@ -215,33 +216,19 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
       };
     }, [filteredComponents, dependencies, viewport]);
 
-    // Build impacted set: any node that depends (directly or transitively) on an offline node
+    // Build impacted set via shared downstream-only utility
     const impactedIds = React.useMemo(() => {
-      const offlineIds = new Set(filteredComponents.filter(c => c.status === 'offline').map(c => c.id));
-      if (offlineIds.size === 0) return new Set<string>();
-      // adjacency from source -> targets (dependency direction)
-      const adj = new Map<string, string[]>();
-      dependencies.forEach(dep => {
-        if (!adj.has(dep.sourceId)) adj.set(dep.sourceId, []);
-        adj.get(dep.sourceId)!.push(dep.targetId);
-      });
-      const impacted = new Set<string>();
-      const queue: string[] = Array.from(offlineIds);
-      const visited = new Set<string>();
-      while (queue.length) {
-        const cur = queue.shift()!;
-        if (visited.has(cur)) continue;
-        visited.add(cur);
-        const nbrs = adj.get(cur) || [];
-        for (const nb of nbrs) {
-          if (!offlineIds.has(nb)) { // don't override true offline
-            impacted.add(nb);
-            queue.push(nb);
-          }
-        }
-      }
-      return impacted;
+      const visibleIds = new Set(filteredComponents.map(c => c.id));
+      return computeImpactedFromOfflines(filteredComponents, dependencies, visibleIds);
     }, [filteredComponents, dependencies]);
+
+    // Compute downstream highlight set on hover
+    React.useEffect(() => {
+      if (!hoveredNode) { setHoverHighlight(new Set()); return; }
+      const visibleIds = new Set(filteredComponents.map(c => c.id));
+      const fwd = buildForwardMap(dependencies, visibleIds);
+      setHoverHighlight(traverseDownstream([hoveredNode], fwd, new Set([hoveredNode])));
+    }, [hoveredNode, filteredComponents, dependencies]);
 
     const getNodeIcon = (type: string) => {
       switch (type) {
@@ -472,6 +459,8 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                   ? 'offline'
                   : (impactedIds.has(node.id) ? 'impacted' : node.component.status);
                 
+                const isHoverHighlighted = hoverHighlight.has(node.id);
+                const glowClass = isHoverHighlighted ? 'filter drop-shadow-[0_0_6px_rgba(56,189,248,0.8)]' : '';
                 return (
                   <g key={node.id}>
                     {/* Node background circle */}
@@ -483,7 +472,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                       stroke="hsl(var(--background))"
                       strokeWidth={getCriticalityStrokeWidth(node.component.criticality)}
                       opacity={selectedNode && !isSelected && !isConnected ? 0.3 : 1}
-                      className="cursor-pointer transition-all duration-200"
+                      className={cn("cursor-pointer transition-all duration-200", glowClass)}
                       onClick={() => handleNodeClick(node)}
                       onMouseEnter={() => setHoveredNode(node.id)}
                       onMouseLeave={() => setHoveredNode(null)}

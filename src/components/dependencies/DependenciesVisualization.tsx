@@ -58,6 +58,9 @@ export const DependenciesVisualization = () => {
   // Layout controls
   const [layoutEngine, setLayoutEngine] = useState<'internal'|'dagre'|'elk'>('internal');
   const [direction, setDirection] = useState<'LR'|'TB'>('TB');
+  // Manage dialog state for per-asset dependency details
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageComponentId, setManageComponentId] = useState<string | null>(null);
 
   const getComponentDependencies = useCallback((componentId: string) => {
     const incoming = dependencies.filter(dep => dep.targetId === componentId);
@@ -351,7 +354,10 @@ export const DependenciesVisualization = () => {
                     className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
                       isSelected ? "border-primary bg-primary/10" : criticalityColors[component.criticality]
                     }`}
-                    onClick={() => setSelectedComponent(isSelected ? null : component.id)}
+                    onClick={() => {
+                      setManageComponentId(component.id);
+                      setManageOpen(true);
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
@@ -369,76 +375,7 @@ export const DependenciesVisualization = () => {
                         </div>
                       </div>
                     </div>
-                    
-                    {isSelected && (
-                      <div className="mt-3 pt-3 border-t border-border">
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Incoming Dependencies</p>
-                            {deps.incoming.length > 0 ? (
-                              <div className="space-y-1 mt-1">
-                                {deps.incoming.map((dep) => {
-                                  const sourceComponent = components.find(c => c.id === dep.sourceId);
-                                  return (
-                                    <div key={dep.id} className="text-xs text-muted-foreground flex items-center space-x-2">
-                                      <span>{sourceComponent?.name}</span>
-                                      <Badge variant="outline" className="text-xs">
-                                        {dep.type}
-                                      </Badge>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 text-destructive hover:text-destructive"
-                                        onClick={() => {
-                                          if (confirm('Delete this dependency?')) deleteDependency(dep.id);
-                                        }}
-                                        aria-label="Delete dependency"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">None</p>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Outgoing Dependencies</p>
-                            {deps.outgoing.length > 0 ? (
-                              <div className="space-y-1 mt-1">
-                                {deps.outgoing.map((dep) => {
-                                  const targetComponent = components.find(c => c.id === dep.targetId);
-                                  return (
-                                    <div key={dep.id} className="text-xs text-muted-foreground flex items-center space-x-2">
-                                      <span>{targetComponent?.name}</span>
-                                      <Badge variant="outline" className="text-xs">
-                                        {dep.type}
-                                      </Badge>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 text-destructive hover:text-destructive"
-                                        onClick={() => {
-                                          if (confirm('Delete this dependency?')) deleteDependency(dep.id);
-                                        }}
-                                        aria-label="Delete dependency"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">None</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    {/* Inline details removed; now handled in modal */}
                   </div>
                 );
               })}
@@ -499,6 +436,106 @@ export const DependenciesVisualization = () => {
               }}
             />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Dependencies modal */}
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent className="max-w-2xl">
+          {(() => {
+            const comp = components.find(c => c.id === manageComponentId);
+            if (!comp) return <div />;
+            const { incoming, outgoing } = getComponentDependencies(comp.id);
+            return (
+              <div className="space-y-3">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between">
+                    <span>Dependencies for {comp.name}</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="capitalize">{comp.type}</Badge>
+                      <span>{incoming.length} in • {outgoing.length} out</span>
+                    </div>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex items-center gap-2 justify-center">
+                  <button
+                    className="uiv-glow-btn uiv-glow-blue"
+                    onClick={() => {
+                      setNewDependency({ sourceId: "", targetId: comp.id, type: "", criticality: "" });
+                      setIsDepDialogOpen(true);
+                    }}
+                  >
+                    + Incoming
+                  </button>
+                  <button
+                    className="uiv-glow-btn uiv-glow-blue"
+                    onClick={() => {
+                      setNewDependency({ sourceId: comp.id, targetId: "", type: "", criticality: "" });
+                      setIsDepDialogOpen(true);
+                    }}
+                  >
+                    + Outgoing
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Incoming</p>
+                    <div className="mt-2 space-y-1">
+                      {incoming
+                        .map(dep => ({ dep, source: components.find(c => c.id === dep.sourceId) }))
+                        .map(({ dep, source }) => (
+                          <div key={dep.id} className="flex items-center justify-between text-sm rounded border p-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="truncate" title={source?.name}>{source?.name}</span>
+                              <Badge variant="outline" className="text-2xs">{dep.type}</Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => { if (confirm('Delete this dependency?')) deleteDependency(dep.id); }}
+                              aria-label="Delete dependency"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      {incoming.length === 0 && (
+                        <p className="text-xs text-muted-foreground">None</p>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Outgoing</p>
+                    <div className="mt-2 space-y-1">
+                      {outgoing
+                        .map(dep => ({ dep, target: components.find(c => c.id === dep.targetId) }))
+                        .map(({ dep, target }) => (
+                          <div key={dep.id} className="flex items-center justify-between text-sm rounded border p-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="truncate" title={target?.name}>{target?.name}</span>
+                              <Badge variant="outline" className="text-2xs">{dep.type}</Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => { if (confirm('Delete this dependency?')) deleteDependency(dep.id); }}
+                              aria-label="Delete dependency"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      {outgoing.length === 0 && (
+                        <p className="text-xs text-muted-foreground">None</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

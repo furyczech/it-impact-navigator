@@ -8,6 +8,7 @@ import { AlertPanel, AlertType as Alert } from "@/components/ui/alert-panel";
 import { NetworkTopology } from "@/components/ui/network-topology";
 import { useItiacStore } from "@/store/useItiacStore";
 import { AuditService } from "@/services/auditService";
+import { computeImpactedFromOfflines, buildForwardMap, traverseDownstream } from "@/lib/utils";
 
 import { 
   Server, 
@@ -62,45 +63,8 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   const offlineCount = components.filter(c => c.status === 'offline').length;
   const maintenanceCount = components.filter(c => c.status === 'maintenance').length;
 
-  // Derive cascading impact: downstream-only (source -> target)
-  const computeImpactedFromOfflines = (): Set<string> => {
-    // Build forward map only
-    const forward = new Map<string, string[]>(); // source -> [targets]
-    dependencies.forEach(dep => {
-      const arrFwd = forward.get(dep.sourceId) || [];
-      arrFwd.push(dep.targetId);
-      forward.set(dep.sourceId, arrFwd);
-    });
-    const traverseForward = (start: string) => {
-      const out: string[] = [];
-      const visited = new Set<string>([start]);
-      const stack = [start];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        const nexts = forward.get(cur) || [];
-        for (const nxt of nexts) {
-          if (!visited.has(nxt)) {
-            visited.add(nxt);
-            out.push(nxt);
-            stack.push(nxt);
-          }
-        }
-      }
-      return out;
-    };
-
-    const roots = components.filter(c => c.status === 'offline').map(c => c.id);
-    const impacted = new Set<string>();
-    for (const id of roots) {
-      const list = traverseForward(id);
-      list.forEach(x => impacted.add(x));
-    }
-    // exclude the roots themselves; they are already offline
-    roots.forEach(id => impacted.delete(id));
-    return impacted;
-  };
-
-  const impactedFromOfflines = computeImpactedFromOfflines();
+  // Derive cascading impact via shared downstream-only utility
+  const impactedFromOfflines = computeImpactedFromOfflines(components, dependencies);
   const effectiveOnlineCount = components.filter(c => c.status === 'online' && !impactedFromOfflines.has(c.id)).length;
   const effectiveOfflineCount = components.filter(c => c.status === 'offline' || impactedFromOfflines.has(c.id)).length;
 
@@ -131,31 +95,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
     logsByComp.forEach(list => list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
     // Pre-build forward dependency map for cascade computation (static over time window)
-    const forward = new Map<string, string[]>();
-    dependencies.forEach(dep => {
-      const arr = forward.get(dep.sourceId) || [];
-      arr.push(dep.targetId);
-      forward.set(dep.sourceId, arr);
-    });
-    const cascadeFrom = (roots: string[]) => {
-      const impacted = new Set<string>();
-      const visited = new Set<string>(roots);
-      const stack = [...roots];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        const nexts = forward.get(cur) || [];
-        for (const nxt of nexts) {
-          if (!visited.has(nxt)) {
-            visited.add(nxt);
-            impacted.add(nxt);
-            stack.push(nxt);
-          }
-        }
-      }
-      // exclude roots themselves
-      roots.forEach(r => impacted.delete(r));
-      return impacted;
-    };
+    const forward = buildForwardMap(dependencies);
 
     for (let i = hours; i >= 0; i--) {
       const ts = new Date(now.getTime() - i * 60 * 60 * 1000);
@@ -179,7 +119,8 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
 
       // Roots for cascade are offline assets at this time
       const offlineRoots = components.filter(c => statusAtTime.get(c.id) === 'offline').map(c => c.id);
-      const impacted = cascadeFrom(offlineRoots);
+      const offlineSet = new Set(offlineRoots);
+      const impacted = traverseDownstream(offlineSet, forward, offlineSet);
 
       // Count effective online excluding impacted
       let effectiveOnlineAtTime = 0;
@@ -207,12 +148,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
     const recentLogs = AuditService.getLogs(50, 'COMPONENT', 'UPDATE');
     
     // Build forward dependency map (downstream only)
-    const forward = new Map<string, string[]>(); // source -> [targets]
-    dependencies.forEach(dep => {
-      const arrFwd = forward.get(dep.sourceId) || [];
-      arrFwd.push(dep.targetId);
-      forward.set(dep.sourceId, arrFwd);
-    });
+    const forward = buildForwardMap(dependencies);
 
     const traverse = (start: string, map: Map<string,string[]>) => {
       const out: string[] = [];
@@ -280,7 +216,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
         timestamp: new Date(comp.lastUpdated),
         component: comp.name,
         criticality: comp.criticality,
-        actionUrl: `#components/${comp.id}`,
+        actionUrl: `#components?impacted=1&root=${encodeURIComponent(comp.id)}`,
         impactedComponents: impactedNames
       });
 
@@ -299,7 +235,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
           timestamp: new Date(),
           component: impactedComp.name,
           criticality: impactedComp.criticality,
-          actionUrl: `#components/${impactedComp.id}`
+          actionUrl: `#components?impacted=1&focus=${encodeURIComponent(impactedComp.id)}&root=${encodeURIComponent(comp.id)}`
         });
       });
     });
@@ -323,7 +259,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
         timestamp: new Date(comp.lastUpdated),
         component: comp.name,
         criticality: comp.criticality,
-        actionUrl: `#components/${comp.id}`,
+        actionUrl: `#components?impacted=1&root=${encodeURIComponent(comp.id)}`,
         impactedComponents: impactedNames
       });
 
@@ -342,7 +278,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
           timestamp: new Date(),
           component: impactedComp.name,
           criticality: impactedComp.criticality,
-          actionUrl: `#components/${impactedComp.id}`
+          actionUrl: `#components?impacted=1&focus=${encodeURIComponent(impactedComp.id)}&root=${encodeURIComponent(comp.id)}`
         });
       });
     });
@@ -407,13 +343,15 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   }, [components, dependencies, workflows, lastRefresh]);
 
   const handleAlertClick = (alert: Alert) => {
-    // Navigate to relevant section based on alert
+    // Use actionUrl hash to pre-filter target pages
+    if (alert.actionUrl?.startsWith('#')) {
+      try { window.location.hash = alert.actionUrl; } catch {}
+    }
     if (alert.actionUrl?.includes('#components') && onQuickNav) {
       onQuickNav("components");
     } else if (alert.actionUrl?.includes('#dependencies') && onQuickNav) {
       onQuickNav("dependencies");
     } else if (alert.component && onQuickNav) {
-      // Default navigation based on component type
       onQuickNav("components");
     }
   };
@@ -498,6 +436,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
           icon={Server}
           variant={effectiveOnlineCount === totalComponents ? "success" : effectiveOfflineCount > 0 ? "destructive" : "warning"}
           interactive
+          tooltip="Offline includes impacted by downstream outages"
           onDrillDown={() => onQuickNav?.("components")}
         />
         

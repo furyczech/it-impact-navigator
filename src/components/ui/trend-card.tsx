@@ -13,6 +13,7 @@ export interface TrendCardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "default" | "success" | "warning" | "destructive";
   interactive?: boolean;
   onDrillDown?: () => void;
+  tooltip?: string;
 }
 
 const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
@@ -26,6 +27,7 @@ const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
     variant = "default",
     interactive = false,
     onDrillDown,
+    tooltip,
     ...props 
   }, ref) => {
     const getTrendIcon = () => {
@@ -73,6 +75,7 @@ const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
           className
         )}
         onClick={interactive ? onDrillDown : undefined}
+        title={tooltip}
         {...props}
       >
         <CardContent className="p-6">
