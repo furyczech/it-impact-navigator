@@ -168,9 +168,16 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       return a.id.replace(/^\w+-/, '');
     };
 
+    // Hide synthetic dependency summary alerts (e.g., "Critical Dependency Issues")
+    const isDependencySummaryAlert = (a: Alert): boolean => {
+      const title = (a.title || '').toLowerCase();
+      return title === 'critical dependency issues' || title.includes('dependency issues');
+    };
+    const baseAlerts = React.useMemo(() => alerts.filter(a => !isDependencySummaryAlert(a)), [alerts]);
+
     const childrenByRoot = new Map<string, Alert[]>();
     const others: Alert[] = [];
-    alerts.forEach(a => {
+    baseAlerts.forEach(a => {
       const rootId = getRootIdFromImpacted(a);
       if (rootId) {
         const arr = childrenByRoot.get(rootId) || [];
@@ -204,8 +211,8 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
     childrenByRoot.forEach(kids => {
       kids.forEach(k => visibleAlerts.push({ alert: k, isChild: false }));
     });
-    const criticalCount = alerts.filter(a => a.severity === "critical").length;
-    const warningCount = alerts.filter(a => a.severity === "warning").length;
+    const criticalCount = baseAlerts.filter(a => a.severity === "critical").length;
+    const warningCount = baseAlerts.filter(a => a.severity === "warning").length;
 
     // Expansion state for root alerts
     const [expandedRoots, setExpandedRoots] = React.useState<Set<string>>(new Set());
@@ -220,7 +227,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
         }
       });
       setExpandedRoots(next);
-    }, [alerts]);
+    }, [baseAlerts]);
     const toggleRoot = (rootKey: string) => {
       setExpandedRoots(prev => {
         const next = new Set(prev);
@@ -230,6 +237,25 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
     };
 
     const canShowProcesses = Boolean(processesEnabled && components && dependencies && workflows && impactedComponentIds);
+
+    // Full list of affected critical dependencies with names
+    const affectedCriticalDeps = React.useMemo(() => {
+      if (!dependencies || !components) return [] as Array<{ id: string; sourceId: string; targetId: string; sourceName: string; targetName: string }>; 
+      const impacted = impactedComponentIds ?? new Set(
+        components
+          .filter(c => c.status === 'offline' || c.status === 'warning')
+          .map(c => c.id)
+      );
+      return dependencies
+        .filter(d => d.criticality === 'critical' && (impacted.has(d.sourceId) || impacted.has(d.targetId)))
+        .map(d => ({
+          id: `${d.sourceId}->${d.targetId}`,
+          sourceId: d.sourceId,
+          targetId: d.targetId,
+          sourceName: components.find(c => c.id === d.sourceId)?.name || d.sourceId,
+          targetName: components.find(c => c.id === d.targetId)?.name || d.targetId,
+        }));
+    }, [dependencies, impactedComponentIds, components]);
 
     // Compute impacted processes when data is available
     const { impactedProcessesCount, totalProcesses } = React.useMemo(() => {

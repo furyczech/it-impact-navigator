@@ -29,8 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, GitBranch, Users, Search, ArrowRight } from "lucide-react";
-
+import { Plus, GitBranch, Users, Search, ArrowRight, Pencil, Trash2, ChevronRight } from "lucide-react";
 
 const criticalityColors = {
   low: "success",
@@ -50,6 +49,7 @@ export const WorkflowsManagement = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<BusinessWorkflow | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<BusinessWorkflow | null>(null);
+  const [initialEditingStepId, setInitialEditingStepId] = useState<string | undefined>(undefined);
 
   const filteredWorkflows = workflows.filter(workflow => {
     const matchesSearch = workflow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -80,7 +80,7 @@ export const WorkflowsManagement = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -88,15 +88,10 @@ export const WorkflowsManagement = () => {
           <p className="text-muted-foreground mt-1">Define and manage business processes and their workflows</p>
         </div>
         <div className="flex space-x-2">
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base inline-flex items-center whitespace-nowrap"
-            title="Create Process"
-            aria-label="Create Process"
-          >
+          <Button onClick={() => setIsFormOpen(true)} size="default">
             <Plus className="w-5 h-5 mr-2" />
             Create Process
-          </button>
+          </Button>
         </div>
         
         <WorkflowForm
@@ -104,6 +99,7 @@ export const WorkflowsManagement = () => {
           onClose={() => {
             setIsFormOpen(false);
             setEditingWorkflow(null);
+            setInitialEditingStepId(undefined);
           }}
           onSave={(workflow) => {
             if (editingWorkflow) {
@@ -111,10 +107,12 @@ export const WorkflowsManagement = () => {
             } else {
               addWorkflow(workflow);
             }
+            setInitialEditingStepId(undefined);
           }}
           workflow={editingWorkflow || undefined}
           components={components}
           isEdit={!!editingWorkflow}
+          initialEditingStepId={initialEditingStepId}
         />
       </div>
 
@@ -160,79 +158,80 @@ export const WorkflowsManagement = () => {
               <span>Business Processes ({filteredWorkflows.length})</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Process</TableHead>
-                  <TableHead>Criticality</TableHead>
-                  <TableHead>Risk Level</TableHead>
-                  <TableHead>Steps</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredWorkflows.map((workflow) => {
-                  const riskLevel = getWorkflowRisk(workflow);
-                  return (
-                    <TableRow 
-                      key={workflow.id}
-                      className={selectedWorkflow?.id === workflow.id ? "bg-primary/5" : ""}
-                    >
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-foreground">{workflow.name}</div>
-                          <div className="text-sm text-muted-foreground">{workflow.description}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={criticalityColors[workflow.criticality]} className="capitalize text-base px-3.5 py-1.5">
-                          {workflow.criticality}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={riskLevel === "high" ? "destructive" : riskLevel === "medium" ? "secondary" : "default"}
-                          className="capitalize text-base px-3.5 py-1.5"
-                        >
-                          {riskLevel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{workflow.steps.length}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setSelectedWorkflow(workflow)}
+          <CardContent className="p-0">
+            <div className="h-[68vh] md:h-[76vh] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Process</TableHead>
+                    <TableHead>Criticality</TableHead>
+                    <TableHead>Risk Level</TableHead>
+                    <TableHead>Steps</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredWorkflows.map((workflow) => {
+                    const riskLevel = getWorkflowRisk(workflow);
+                    return (
+                      <TableRow 
+                        key={workflow.id}
+                        className={(selectedWorkflow?.id === workflow.id ? "bg-primary/5 " : "") + "cursor-pointer hover:bg-accent/10"}
+                        onClick={() => setSelectedWorkflow(workflow)}
+                      >
+                        <TableCell>
+                          <div>
+                            <div className="font-medium text-foreground">{workflow.name}</div>
+                            <div className="text-sm text-muted-foreground">{workflow.description}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={criticalityColors[workflow.criticality]} className="capitalize text-xs px-2 py-0.5">
+                            {workflow.criticality}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={riskLevel === "high" ? "destructive" : riskLevel === "medium" ? "secondary" : "default"}
+                            className="capitalize text-xs px-2 py-0.5"
                           >
-                            View
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => {
-                              setEditingWorkflow(workflow);
-                              setIsFormOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => deleteWorkflow(workflow.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                            {riskLevel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{workflow.steps.length}</TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingWorkflow(workflow);
+                                setIsFormOpen(true);
+                              }}
+                              aria-label="Edit process"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={(e) => { e.stopPropagation(); deleteWorkflow(workflow.id); }}
+                              className="text-destructive hover:text-destructive"
+                              aria-label="Delete process"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -244,7 +243,7 @@ export const WorkflowsManagement = () => {
               <span>Process Details</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="h-[68vh] md:h-[76vh] overflow-auto pr-2">
             {selectedWorkflow ? (
               <div className="space-y-4">
                 <div>
@@ -260,48 +259,70 @@ export const WorkflowsManagement = () => {
 
                 <div>
                   <h4 className="font-medium text-foreground mb-3">Process Steps</h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {selectedWorkflow.steps
                       .sort((a, b) => a.order - b.order)
-                      .map((step, index) => (
-                        <div key={step.id} className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center text-xs font-medium text-primary">
-                            {step.order}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-foreground">{step.name}</div>
-                            <div className="text-sm text-muted-foreground">{step.description}</div>
-                            <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-1">
-                              <span>Primary IT Assets:</span>
-                              <div className="flex flex-wrap gap-1">
-                                {(((step.primaryComponentIds && step.primaryComponentIds.length > 0)
-                                  ? step.primaryComponentIds
-                                  : (step.primaryComponentId ? [step.primaryComponentId] : [])) as string[])
-                                  .map(pid => (
-                                    <Badge key={pid} variant="outline" className="text-xs">
-                                      {getComponentName(pid)}
-                                    </Badge>
-                                  ))}
-                              </div>
+                      .map((step) => {
+                        const primaryIds = (step.primaryComponentIds && step.primaryComponentIds.length > 0)
+                          ? step.primaryComponentIds
+                          : (step.primaryComponentId ? [step.primaryComponentId] : []);
+                        return (
+                          <div
+                            key={step.id}
+                            className="group flex items-start gap-3 rounded-lg border border-border p-3 hover:bg-accent/10 transition cursor-pointer"
+                            onClick={() => {
+                              if (!selectedWorkflow) return;
+                              setEditingWorkflow(selectedWorkflow);
+                              setInitialEditingStepId(step.id);
+                              setIsFormOpen(true);
+                            }}
+                          >
+                            {/* Numbered circle */}
+                            <div className="flex-none w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium grid place-items-center">
+                              {step.order}
                             </div>
-                            {step.alternativeComponentIds && step.alternativeComponentIds.length > 0 && (
-                              <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-1">
-                                <span>Alternative IT Assets:</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {step.alternativeComponentIds.map(aid => (
-                                    <Badge key={aid} variant="secondary" className="text-xs">
-                                      {getComponentName(aid)}
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium text-foreground truncate">{step.name}</div>
+                                  {step.description && (
+                                    <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                                      {step.description}
+                                    </div>
+                                  )}
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition" />
+                              </div>
+                              {/* Primary assets */}
+                              <div className="mt-2 text-[11px] text-muted-foreground">
+                                <span className="font-medium">Primary IT Assets:</span>
+                                <span className="sr-only"> </span>
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  {primaryIds.map(pid => (
+                                    <Badge key={pid} variant="secondary" className="text-[11px] px-2 py-0.5">
+                                      {getComponentName(pid)}
                                     </Badge>
                                   ))}
                                 </div>
                               </div>
-                            )}
+                              {/* Alternative assets */}
+                              {step.alternativeComponentIds && step.alternativeComponentIds.length > 0 && (
+                                <div className="mt-2 text-[11px] text-muted-foreground">
+                                  <span className="font-medium">Alternative IT Assets:</span>
+                                  <div className="mt-1 flex flex-wrap gap-1.5">
+                                    {step.alternativeComponentIds.map(aid => (
+                                      <Badge key={aid} variant="outline" className="text-[11px] px-2 py-0.5">
+                                        {getComponentName(aid)}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          {index < selectedWorkflow.steps.length - 1 && (
-                            <ArrowRight className="w-4 h-4 text-muted-foreground mt-1" />
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
 
