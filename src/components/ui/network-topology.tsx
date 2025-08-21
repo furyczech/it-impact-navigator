@@ -10,10 +10,7 @@ import {
   Database, 
   Globe, 
   Zap,
-  Filter,
-  ZoomIn,
-  ZoomOut,
-  Maximize2
+  Crosshair
 } from "lucide-react";
 
 export interface NetworkTopologyProps {
@@ -28,6 +25,8 @@ export interface NetworkTopologyProps {
   };
   onFiltersChange?: (filters: any) => void;
   className?: string;
+  rightExtra?: React.ReactNode;
+  compact?: boolean; // force compact visuals (smaller nodes/labels)
 }
 
 interface Node {
@@ -54,6 +53,8 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
     filters,
     onFiltersChange,
     className,
+    rightExtra,
+    compact,
     ...props 
   }, ref) => {
     const [selectedNode, setSelectedNode] = React.useState<string | null>(null);
@@ -61,11 +62,18 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
     const [hoverHighlight, setHoverHighlight] = React.useState<Set<string>>(new Set());
     const [zoom, setZoom] = React.useState(1);
     const [pan, setPan] = React.useState({ x: 0, y: 0 });
-    const [showFilters, setShowFilters] = React.useState(false);
+    const isPanningRef = React.useRef(false);
+    const panStartRef = React.useRef<{x: number; y: number}>({ x: 0, y: 0 });
+    const pointerStartRef = React.useRef<{x: number; y: number}>({ x: 0, y: 0 });
+    // filters UI removed for simplified layout
 
     const svgRef = React.useRef<SVGSVGElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [viewport, setViewport] = React.useState<{width: number; height: number}>({ width: 600, height: 400 });
+    // Refs to keep latest values inside native event listeners
+    const zoomRef = React.useRef(1);
+    const panRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const viewportRef = React.useRef<{ width: number; height: number }>({ width: 600, height: 400 });
 
     // Observe container size to keep SVG responsive
     React.useEffect(() => {
@@ -99,88 +107,78 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
       });
     }, [components, filters]);
 
-    // Create nodes and connections
-    const { nodes, connections } = React.useMemo(() => {
+    // Create nodes and connections with a top-down hierarchical layout
+    const { nodes, connections, levelCount } = React.useMemo(() => {
       const nodeMap = new Map<string, Node>();
       const width = viewport.width;
       const height = viewport.height;
-      const centerX = width / 2;
-      const centerY = height / 2;
-      
-      // Build undirected adjacency to understand connectivity
-      const adj = new Map<string, Set<string>>();
-      filteredComponents.forEach(c => adj.set(c.id, new Set<string>()));
+      const paddingX = 48;
+      const paddingY = 48;
+
+      // Consider only visible components
+      const visibleIds = new Set(filteredComponents.map(c => c.id));
+
+      // Build forward adjacency among visible nodes
+      const fwd = buildForwardMap(dependencies, visibleIds);
+
+      // Compute indegrees among visible nodes to find roots
+      const indeg = new Map<string, number>();
+      filteredComponents.forEach(c => indeg.set(c.id, 0));
       dependencies.forEach(dep => {
-        if (adj.has(dep.sourceId) && adj.has(dep.targetId)) {
-          adj.get(dep.sourceId)!.add(dep.targetId);
-          adj.get(dep.targetId)!.add(dep.sourceId);
+        if (visibleIds.has(dep.sourceId) && visibleIds.has(dep.targetId)) {
+          indeg.set(dep.targetId, (indeg.get(dep.targetId) || 0) + 1);
         }
       });
 
-      // Order components so connected nodes appear near each other
-      const visited = new Set<string>();
-      const orderedComponents: ITComponent[] = [];
-      const byId = new Map(filteredComponents.map(c => [c.id, c] as const));
-      // Helper to pick next seed: highest degree unvisited
-      const pickSeed = () => {
-        let best: string | null = null;
-        let bestDeg = -1;
-        for (const c of filteredComponents) {
-          if (visited.has(c.id)) continue;
-          const deg = adj.get(c.id)?.size ?? 0;
-          if (deg > bestDeg) { bestDeg = deg; best = c.id; }
-        }
-        return best;
-      };
-      // BFS from seed to cluster connected nodes
-      while (visited.size < filteredComponents.length) {
-        const seed = pickSeed();
-        if (!seed) break;
-        const q: string[] = [seed];
-        visited.add(seed);
-        while (q.length) {
-          const cur = q.shift()!;
-          const comp = byId.get(cur);
-          if (comp) orderedComponents.push(comp);
-          const nbrs = Array.from(adj.get(cur) ?? []);
-          // Sort neighbors by degree desc to place hubs earlier
-          nbrs.sort((a, b) => (adj.get(b)?.size ?? 0) - (adj.get(a)?.size ?? 0));
-          for (const nb of nbrs) {
-            if (!visited.has(nb)) { visited.add(nb); q.push(nb); }
+      const roots = filteredComponents.filter(c => (indeg.get(c.id) || 0) === 0).map(c => c.id);
+      // Fallback: if cycle makes no roots, pick all nodes as level 0
+      const init = roots.length > 0 ? roots : filteredComponents.map(c => c.id);
+
+      // Assign levels via BFS downstream
+      const level = new Map<string, number>();
+      const q: string[] = [];
+      init.forEach(id => { level.set(id, 0); q.push(id); });
+      const visited = new Set<string>(init);
+      while (q.length) {
+        const cur = q.shift()!;
+        const nexts = fwd.get(cur) || [];
+        nexts.forEach(nid => {
+          if (!visibleIds.has(nid)) return;
+          const nextLevel = (level.get(cur) || 0) + 1;
+          if (!level.has(nid) || nextLevel > (level.get(nid) || 0)) {
+            level.set(nid, nextLevel);
           }
-        }
-      }
-      // Include any isolated nodes that might have been missed
-      if (orderedComponents.length < filteredComponents.length) {
-        const seen = new Set(orderedComponents.map(c => c.id));
-        filteredComponents.forEach(c => { if (!seen.has(c.id)) orderedComponents.push(c); });
+          if (!visited.has(nid)) { visited.add(nid); q.push(nid); }
+        });
       }
 
-      // Multi-ring radial layout; fill rings in BFS order
-      const n = orderedComponents.length;
-      const ringCount = n <= 12 ? 1 : n <= 36 ? 2 : n <= 80 ? 3 : 4;
-      const perRingBase = Math.ceil(n / ringCount);
-      const rings: ITComponent[][] = [];
-      for (let r = 0; r < ringCount; r++) rings.push([]);
-      orderedComponents.forEach((component, idx) => {
-        // Distribute in order to keep related nodes contiguous
-        const r = Math.floor(idx / perRingBase);
-        const ringIndex = Math.min(r, ringCount - 1);
-        rings[ringIndex].push(component);
+      // Group by levels
+      const maxLevel = Math.max(0, ...Array.from(level.values())) || 0;
+      const levels: string[][] = [];
+      for (let i = 0; i <= maxLevel; i++) levels.push([]);
+      filteredComponents.forEach(c => {
+        const lv = level.has(c.id) ? level.get(c.id)! : 0;
+        if (!levels[lv]) levels[lv] = [];
+        levels[lv].push(c.id);
       });
 
-      const minDim = Math.min(width, height);
-      const innerRadius = Math.max(60, minDim * 0.18);
-      const outerRadius = Math.max(innerRadius + 40, minDim * 0.42);
-      const ringRadius = (ri: number) => innerRadius + (ri * (outerRadius - innerRadius)) / Math.max(1, ringCount - 1);
-
-      rings.forEach((ring, ri) => {
-        const R = ringRadius(ri);
-        const perRing = Math.max(1, ring.length);
-        ring.forEach((component, i) => {
-          const angle = (i / perRing) * 2 * Math.PI;
-          const x = centerX + Math.cos(angle) * R;
-          const y = centerY + Math.sin(angle) * R;
+      // Create nodes positioned by level rows from top to bottom with vertical centering
+      const availableH = Math.max(0, height - paddingY * 2);
+      const rows = Math.max(1, levels.length);
+      const baseMinGap = 90;
+      const compactMinGap = 70;
+      const maxGap = 140;
+      // provisional gap without knowing compact flag
+      let rowGap = rows > 1 ? Math.min(maxGap, Math.max(baseMinGap, availableH / (rows - 1))) : availableH;
+      // used height by rows
+      let usedH = rows > 1 ? (rows - 1) * rowGap : 0;
+      let startY = paddingY + Math.max(0, (availableH - usedH) / 2);
+      levels.forEach((ids, li) => {
+        const perRow = Math.max(1, ids.length);
+        ids.forEach((id, idx) => {
+          const component = filteredComponents.find(c => c.id === id)!;
+          const x = paddingX + (idx + 1) * ((width - paddingX * 2) / (perRow + 1));
+          const y = startY + li * rowGap;
           nodeMap.set(component.id, {
             id: component.id,
             component,
@@ -191,30 +189,61 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
         });
       });
 
-      // Create connections
+      // Create connections (directed)
       const connectionList: Connection[] = [];
       dependencies.forEach(dep => {
         const fromNode = nodeMap.get(dep.sourceId);
         const toNode = nodeMap.get(dep.targetId);
-        
         if (fromNode && toNode) {
           fromNode.connections.push(toNode.id);
           toNode.connections.push(fromNode.id);
-          
-          connectionList.push({
-            id: dep.id,
-            dependency: dep,
-            from: fromNode,
-            to: toNode
-          });
+          connectionList.push({ id: dep.id, dependency: dep, from: fromNode, to: toNode });
         }
       });
 
-      return {
-        nodes: Array.from(nodeMap.values()),
-        connections: connectionList
-      };
+      return { nodes: Array.from(nodeMap.values()), connections: connectionList, levelCount: levels.length };
     }, [filteredComponents, dependencies, viewport]);
+
+    // Fit all nodes into view (expand map) when nodes/layout/viewport change
+    const fitToNodes = React.useCallback(() => {
+      if (nodes.length === 0) return;
+      const pad = 80;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach(n => {
+        minX = Math.min(minX, n.x);
+        maxX = Math.max(maxX, n.x);
+        minY = Math.min(minY, n.y);
+        maxY = Math.max(maxY, n.y);
+      });
+      const widthNeeded = Math.max(50, (maxX - minX) + pad * 2);
+      const heightNeeded = Math.max(50, (maxY - minY) + pad * 2);
+      const z = Math.min(viewport.width / widthNeeded, viewport.height / heightNeeded);
+      const clamped = Math.max(0.3, Math.min(3, z));
+      setZoom(clamped);
+      // Center the viewBox on the nodes bounds
+      const viewW = viewport.width / clamped;
+      const viewH = viewport.height / clamped;
+      const targetX = minX - pad - (viewW - (maxX - minX + pad * 2)) / 2;
+      const targetY = minY - pad - (viewH - (maxY - minY + pad * 2)) / 2;
+      setPan({ x: targetX, y: targetY });
+    }, [nodes, viewport.width, viewport.height]);
+
+    React.useEffect(() => {
+      fitToNodes();
+    }, [fitToNodes]);
+
+    // Keep refs in sync with state for native listeners
+    React.useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+    React.useEffect(() => { panRef.current = pan; }, [pan]);
+    React.useEffect(() => { viewportRef.current = viewport; }, [viewport]);
+
+    // Decide compact mode: explicit prop wins; otherwise based on node and level counts
+    const compactMode = React.useMemo(() => {
+      if (typeof compact === 'boolean') return compact;
+      const manyNodes = nodes.length > 40;
+      const manyLevels = (levelCount || 0) > 6;
+      return manyNodes || manyLevels;
+    }, [compact, nodes.length, levelCount]);
 
     // Build impacted set via shared downstream-only utility
     const impactedIds = React.useMemo(() => {
@@ -290,85 +319,146 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
       onNodeClick?.(node.component);
     };
 
-    const handleZoomIn = () => setZoom(prev => Math.min(prev * 1.2, 3));
-    const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.2, 0.3));
-    const handleResetView = () => {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
+    // Pointer-based panning
+    const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+      // Only start panning on primary button
+      if (e.button !== 0) return;
+      e.preventDefault();
+      isPanningRef.current = true;
+      pointerStartRef.current = { x: e.clientX, y: e.clientY };
+      panStartRef.current = { ...pan };
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+    };
+
+    const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+      if (!isPanningRef.current) return;
+      const dx = (e.clientX - pointerStartRef.current.x) / zoom;
+      const dy = (e.clientY - pointerStartRef.current.y) / zoom;
+      // ViewBox minX/minY: dragging right should move content right => decrease minX
+      setPan({ x: panStartRef.current.x - dx, y: panStartRef.current.y - dy });
+    };
+
+    const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+      isPanningRef.current = false;
+      (e.target as Element).releasePointerCapture?.(e.pointerId);
+    };
+
+    // Wheel-based zoom towards cursor using non-passive native listener
+    React.useEffect(() => {
+      const svg = svgRef.current;
+      if (!svg) return;
+
+      const onWheelNative = (e: WheelEvent) => {
+        // Prevent page scroll during zoom
+        e.preventDefault();
+        const rect = svg.getBoundingClientRect();
+        const currentZoom = zoomRef.current;
+        const currentPan = panRef.current;
+        const currentViewport = viewportRef.current;
+
+        const scaleFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const newZoom = Math.max(0.3, Math.min(3, currentZoom * scaleFactor));
+        if (newZoom === currentZoom) return;
+
+        // World coords under cursor before zoom
+        const viewW = currentViewport.width / currentZoom;
+        const viewH = currentViewport.height / currentZoom;
+        const cursorX = e.clientX - rect.left;
+        const cursorY = e.clientY - rect.top;
+        const worldX = currentPan.x + (cursorX / rect.width) * viewW;
+        const worldY = currentPan.y + (cursorY / rect.height) * viewH;
+
+        // After zoom, adjust pan so the cursor points to the same world coords
+        const newViewW = currentViewport.width / newZoom;
+        const newViewH = currentViewport.height / newZoom;
+        const newPanX = worldX - (cursorX / rect.width) * newViewW;
+        const newPanY = worldY - (cursorY / rect.height) * newViewH;
+
+        setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      };
+
+      svg.addEventListener('wheel', onWheelNative, { passive: false });
+      return () => {
+        svg.removeEventListener('wheel', onWheelNative as EventListener);
+      };
+    }, []);
+
+    const onDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+      // Quick zoom-in on double click
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const scaleFactor = 1.2;
+      const newZoom = Math.max(0.3, Math.min(3, zoom * scaleFactor));
+      const viewW = viewport.width / zoom;
+      const viewH = viewport.height / zoom;
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+      const worldX = pan.x + (cursorX / rect.width) * viewW;
+      const worldY = pan.y + (cursorY / rect.height) * viewH;
+      const newViewW = viewport.width / newZoom;
+      const newViewH = viewport.height / newZoom;
+      const newPanX = worldX - (cursorX / rect.width) * newViewW;
+      const newPanY = worldY - (cursorY / rect.height) * newViewH;
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
     };
 
     return (
-      <Card ref={ref} className={cn("bg-card border-border shadow-depth", className)} {...props}>
+      <Card ref={ref} className={cn("bg-card border-border shadow-depth flex flex-col h-full", className)} {...props}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Network className="w-5 h-5 text-primary" />
               <span>Network Topology</span>
-              <Badge variant="outline" className="ml-2">
-                {filteredComponents.length} nodes
-              </Badge>
             </CardTitle>
-            
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className="h-8"
-              >
-                <Filter className="w-4 h-4" />
-              </Button>
-              
-              <div className="flex items-center space-x-1">
-                <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 w-8 p-0">
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 w-8 p-0">
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleResetView} className="h-8 w-8 p-0">
-                  <Maximize2 className="w-4 h-4" />
-                </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Fit to view"
+              className="h-8 w-8 p-0 rounded-full"
+              onClick={() => fitToNodes()}
+            >
+              <Crosshair className="w-4 h-4" />
+            </Button>
+          </div>
+          {/* Legend under title */}
+          <div className="mt-2 text-[11px] leading-tight">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: 'hsl(var(--destructive))' }} />
+                <span className="text-foreground">Offline</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+                <span className="text-foreground">Impacted</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg width="64" height="10" viewBox="0 0 64 10" className="shrink-0">
+                  <line x1="1" y1="5" x2="63" y2="5" stroke="hsl(var(--destructive))" strokeWidth="2" strokeDasharray="5,5" />
+                </svg>
+                <span className="text-foreground">Impacted path</span>
               </div>
             </div>
           </div>
-          
-          {showFilters && (
-            <div className="pt-3 border-t border-border">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                  All Status
-                </Badge>
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                  Online Only
-                </Badge>
-                <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                  Critical Only
-                </Badge>
-              </div>
-            </div>
-          )}
         </CardHeader>
         
-        <CardContent className="pt-0">
-          {/* Legend */}
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-2">
-            <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--success))'}} /> Online</div>
-            <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--warning))'}} /> Warning</div>
-            <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} /> Impacted</div>
-            <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--destructive))'}} /> Offline</div>
-            <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
-          </div>
+        <CardContent className="pt-0 flex-1 min-h-0 flex flex-col">
           <div 
             ref={containerRef}
-            className="relative w-full h-[60vh] bg-background/50 rounded-lg border border-border overflow-hidden"
+            className="relative w-full flex-1 min-h-0 bg-background/50 rounded-lg border border-border overflow-hidden"
           >
             <svg
               ref={svgRef}
               width="100%"
               height="100%"
-              viewBox={`${-pan.x} ${-pan.y} ${Math.max(300, viewport.width) / zoom} ${Math.max(200, viewport.height) / zoom}`}
-              className="cursor-grab active:cursor-grabbing"
+              viewBox={`${pan.x} ${pan.y} ${Math.max(300, viewport.width) / zoom} ${Math.max(200, viewport.height) / zoom}`}
+              className="cursor-grab active:cursor-grabbing touch-none select-none"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerUp}
+              onDoubleClick={onDoubleClick}
             >
               {/* Grid background */}
               <defs>
@@ -397,14 +487,36 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
               {/* Connections */}
               {connections.map(connection => {
                 const fromOffline = connection.from.component.status === 'offline';
+                const fromImpacted = impactedIds.has(connection.from.id);
                 const toImpacted = impactedIds.has(connection.to.id);
-                const isImpactPath = fromOffline && toImpacted;
+                const isImpactPath = (fromOffline || fromImpacted) && toImpacted;
                 const isCritical = connection.dependency.criticality === "critical";
-                const strokeColor = isImpactPath ? "hsl(var(--primary))" : (isCritical ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground))");
-                const markerId = isImpactPath ? 'arrow-impact' : (isCritical ? 'arrow-critical' : 'arrow-muted');
+
+                // Style priority: Impact path > Critical > Regular
+                let strokeColor: string;
+                let markerId: string;
+                let strokeWidth: number;
+                let strokeDasharray: string | undefined;
+
+                if (isImpactPath) {
+                  strokeColor = "hsl(var(--destructive))"; // red
+                  markerId = 'arrow-critical';
+                  strokeWidth = 2;
+                  strokeDasharray = "5,5"; // dashed red for impacted path
+                } else if (isCritical) {
+                  strokeColor = "hsl(var(--destructive))"; // red solid
+                  markerId = 'arrow-critical';
+                  strokeWidth = 2;
+                  strokeDasharray = undefined;
+                } else {
+                  strokeColor = "hsl(var(--muted-foreground))";
+                  markerId = 'arrow-muted';
+                  strokeWidth = 1;
+                  strokeDasharray = "5,5"; // regular stays dashed gray
+                }
 
                 // Shorten line to node edges so arrowhead isn't under the target circle
-                const manyNodes = nodes.length > 40;
+                const manyNodes = compactMode;
                 const radiusFor = (nodeId: string) => {
                   const isSel = selectedNode === nodeId;
                   const isHov = hoveredNode === nodeId;
@@ -437,8 +549,8 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                     y2={y2}
                     stroke={strokeColor}
                     markerEnd={`url(#${markerId})`}
-                    strokeWidth={isCritical ? 2 : 1}
-                    strokeDasharray={isCritical ? "none" : "5,5"}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={strokeDasharray}
                     opacity={selectedNode && 
                       selectedNode !== connection.from.id && 
                       selectedNode !== connection.to.id ? 0.3 : 0.7}
@@ -454,7 +566,7 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                 const isSelected = selectedNode === node.id;
                 const isHovered = hoveredNode === node.id;
                 const isConnected = selectedNode && node.connections.includes(selectedNode);
-                const manyNodes = nodes.length > 40;
+                const manyNodes = compactMode;
                 const displayStatus = node.component.status === 'offline'
                   ? 'offline'
                   : (impactedIds.has(node.id) ? 'impacted' : node.component.status);
@@ -492,13 +604,13 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                     {/* Node label (always visible) */}
                     <text
                       x={node.x}
-                      y={node.y + (manyNodes ? 26 : 35)}
+                      y={node.y + (manyNodes ? 22 : 35)}
                       textAnchor="middle"
-                      className="text-[10px] md:text-xs fill-foreground font-medium pointer-events-none"
+                      className={manyNodes ? "text-[9px] fill-foreground font-medium pointer-events-none" : "text-[10px] md:text-xs fill-foreground font-medium pointer-events-none"}
                       opacity={selectedNode && !isSelected && !isConnected ? 0.5 : 1}
                     >
-                      {node.component.name.length > (manyNodes ? 10 : 12)
-                        ? `${node.component.name.substring(0, manyNodes ? 10 : 12)}...`
+                      {node.component.name.length > (manyNodes ? 9 : 12)
+                        ? `${node.component.name.substring(0, manyNodes ? 9 : 12)}...`
                         : node.component.name}
                     </text>
                   </g>

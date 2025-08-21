@@ -72,7 +72,7 @@ const Index = () => {
 
   return (
     <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
-      <div className="space-y-6">
+      <div className="h-full min-h-0 flex flex-col gap-4 px-4 md:px-6 py-4">
         {renderContent()}
       </div>
     </MainLayout>

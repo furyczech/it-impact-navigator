@@ -169,7 +169,7 @@ const InteractiveChart = React.forwardRef<HTMLDivElement, InteractiveChartProps>
 
     return (
       <Card ref={ref} className="bg-card border-border shadow-depth" {...props}>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 px-0">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Icon className="w-5 h-5 text-primary" />
@@ -215,7 +215,7 @@ const InteractiveChart = React.forwardRef<HTMLDivElement, InteractiveChartProps>
           )}
         </CardHeader>
         
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 px-0">
           <div className="w-full" style={{ height: `${height}px` }}>
             {renderChart()}
           </div>

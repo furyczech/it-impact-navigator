@@ -7,6 +7,7 @@ import { ExportService } from "@/services/exportService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { 
   Table, 
   TableBody, 
@@ -86,6 +87,8 @@ export const ComponentsManagement = () => {
   const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [headerElevated, setHeaderElevated] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ITComponent | null>(null);
 
   // Parse hash parameters for pre-filters e.g. #components?impacted=1&focus=<id>
   useEffect(() => {
@@ -195,23 +198,25 @@ export const ComponentsManagement = () => {
   const sortIndicator = (key: typeof sortBy) => sortBy === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 flex flex-col gap-4 overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">IT Assets Management</h1>
+          <h1 className="text-xl font-semibold text-foreground">IT Assets Management</h1>
           <p className="text-muted-foreground mt-1">Manage IT assets and their configurations</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="uiv-glow-btn uiv-glow-blue uiv-glow-wide text-base inline-flex items-center whitespace-nowrap"
+          <Button
+            variant="default"
+            size="sm"
             title="Add IT Asset"
             aria-label="Add IT Asset"
             onClick={() => setIsDialogOpen(true)}
+            className="hover:bg-primary/80 hover:saturate-150 focus-visible:ring-primary/60"
           >
-            <Plus className="w-5 h-5 mr-2" />
+            <Plus className="w-3 h-3" />
             Add IT Asset
-          </button>
+          </Button>
         </div>
         
         <ComponentForm
@@ -253,6 +258,45 @@ export const ComponentsManagement = () => {
           component={editingComponent || undefined}
           isEdit={!!editingComponent}
         />
+
+        {/* Confirm Delete Dialog */}
+        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete IT Asset</DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p>
+                Are you sure you want to delete
+                {" "}
+                <span className="font-medium text-foreground">
+                  {deleteTarget?.name}
+                </span>
+                ? This action cannot be undone.
+              </p>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (deleteTarget) deleteComponent(deleteTarget.id);
+                  setIsDeleteOpen(false);
+                  setDeleteTarget(null);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Filters */}
@@ -322,71 +366,76 @@ export const ComponentsManagement = () => {
       </Card>
 
       {/* IT Assets Table */}
-      <Card className="bg-card border-border shadow-depth">
+      <Card className="bg-card border-border shadow-depth mb-0 overflow-hidden flex-1 flex flex-col min-h-0">
         <CardHeader className="pl-4 pr-0">
           <CardTitle className="flex items-center space-x-2">
             <Server className="w-5 h-5 text-primary" />
             <span>IT Assets ({filteredComponents.length})</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent className="p-0 flex-1 min-h-0">
           <div
-            className="h-[70vh] overflow-auto"
+            className="max-h-[calc(100vh-260px)] overflow-y-auto overflow-x-hidden"
             onScroll={(e) => {
               const scrolled = (e.target as HTMLDivElement).scrollTop > 0;
               if (scrolled !== headerElevated) setHeaderElevated(scrolled);
             }}
           >
-          <Table className="w-full table-edge-tight table-collapse">
+          <Table className="w-full table-edge-tight table-collapse compact-tables text-xs table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead
-                  className={`cursor-pointer w-[420px] sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[34%] sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('name')}
                 >
                   IT Asset{sortIndicator('name')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('type')}
                 >
                   Type{sortIndicator('type')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('status')}
                 >
                   Status{sortIndicator('status')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('criticality')}
                 >
                   Criticality{sortIndicator('criticality')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('location')}
                 >
                   Location{sortIndicator('location')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('vendor')}
                 >
                   Vendor{sortIndicator('vendor')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('owner')}
                 >
                   Owner{sortIndicator('owner')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer sticky top-0 z-10 bg-card border-b border-border ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[8%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('lastUpdated')}
                 >
                   Last Updated{sortIndicator('lastUpdated')}
+                </TableHead>
+                <TableHead
+                  className={`text-right w-[10%] px-2 pr-3 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                >
+                  Actions
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -398,8 +447,8 @@ export const ComponentsManagement = () => {
                 const causeName = causeId ? components.find(c => c.id === causeId)?.name : undefined;
                 return (
                   <TableRow key={component.id} id={`row-${component.id}`}>
-                    <TableCell className="w-[420px]">
-                      <div className="flex items-center gap-3">
+                    <TableCell className="w-[34%]">
+                      <div className="flex items-center gap-2">
                         <div className="shrink-0">
                           <label className="switch" title={component.status === 'offline' ? 'Bring Online' : 'Mark as Down (offline)'}>
                             <input
@@ -414,71 +463,81 @@ export const ComponentsManagement = () => {
                             <span className="slider"></span>
                           </label>
                         </div>
-                        <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                          <Icon className="w-4 h-4 text-primary" />
+                        <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
+                          <Icon className="w-3.5 h-3.5 text-primary" />
                         </div>
-                        <div className="min-w-0 max-w-[420px]">
-                          <div className="font-medium text-foreground truncate">{component.name}</div>
-                          <div className="text-sm text-muted-foreground truncate">{component.description}</div>
+                        <div className="min-w-0 max-w-full">
+                          <div className="font-medium text-foreground truncate text-sm">{component.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{component.description}</div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-base">
-                      <Badge variant="outline" className="capitalize text-base px-3.5 py-1.5">
+                    <TableCell className="text-xs w-[7%] px-2 truncate">
+                      <Badge variant="outline" className="capitalize text-xs px-2 py-0.5">
                         {component.type.replace('-', ' ')}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-base">
+                    <TableCell className="text-xs w-[7%] px-2 truncate">
                       <div className="flex items-center gap-2">
-                        <Badge variant={statusColors[component.status]} className="capitalize text-lg px-4 py-2">
+                        <Badge variant={statusColors[component.status]} className="capitalize text-xs px-2 py-0.5">
                           {component.status}
                         </Badge>
                         {impacted && (
                           <Badge 
                             variant="warning" 
-                            className="text-xs px-2 py-0.5" 
+                            className="text-[10px] px-1.5 py-0.5" 
                             title={causeName ? `Impacted by ${causeName}` : 'Impacted by downstream outage'}
                           >
                             Impacted
                           </Badge>
                         )}
                         {impactedOnly && component.status === 'offline' && (
-                          <Badge variant="destructive" className="text-xs px-2 py-0.5">Root</Badge>
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">Root</Badge>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-base">
-                      <Badge variant={criticalityColors[component.criticality]} className="capitalize text-base px-3.5 py-1.5">
+                    <TableCell className="text-xs w-[7%] px-2 truncate">
+                      <Badge variant={criticalityColors[component.criticality]} className="capitalize text-xs px-2 py-0.5">
                         {component.criticality}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{component.location}</TableCell>
-                    <TableCell className="text-muted-foreground">{component.vendor}</TableCell>
-                    <TableCell className="text-muted-foreground">{component.owner}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground w-[7%] px-2 truncate" title={component.location}>
+                      {component.location}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground w-[7%] px-2 truncate" title={component.vendor}>
+                      {component.vendor}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground w-[7%] px-2 truncate" title={component.owner}>
+                      {component.owner}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground w-[8%] px-2 truncate">
                       {new Date(component.lastUpdated as any).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="w-[140px]">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="uiv-glow-btn uiv-glow-blue"
+                    <TableCell className="w-[10%] px-2 pr-3">
+                      <div className="w-full flex items-center justify-end gap-1 whitespace-nowrap">
+                        <Button
+                          variant="default"
+                          size="sm"
                           title="Edit"
                           aria-label={`Edit ${component.name}`}
                           onClick={() => {
                             setEditingComponent(component);
                             setIsDialogOpen(true);
                           }}
+                          className="w-[88px] hover:bg-primary/80 hover:saturate-150 focus-visible:ring-primary/60"
                         >
                           Edit
-                        </button>
-                        <button
-                          className="uiv-glow-btn uiv-glow-red ml-2"
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           title="Delete"
                           aria-label={`Delete ${component.name}`}
-                          onClick={() => deleteComponent(component.id)}
+                          onClick={() => { setDeleteTarget(component); setIsDeleteOpen(true); }}
+                          className="w-[88px] hover:bg-destructive/80 hover:saturate-150 focus-visible:ring-destructive/60"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

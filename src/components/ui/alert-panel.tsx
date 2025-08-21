@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { ITComponent, ComponentDependency, BusinessWorkflow } from "@/types/itiac";
+import { ProcessImpactPanel } from "@/components/ui/process-impact-panel";
 import { 
   AlertTriangle, 
   AlertCircle, 
@@ -35,6 +37,12 @@ export interface AlertPanelProps {
   onAlertDismiss?: (alertId: string) => void;
   onAlertAcknowledge?: (alertId: string) => void;
   className?: string;
+  // Optional: enable Processes sub-tab within the Active Alerts card
+  processesEnabled?: boolean;
+  components?: ITComponent[];
+  dependencies?: ComponentDependency[];
+  workflows?: BusinessWorkflow[];
+  impactedComponentIds?: Set<string>;
 }
 
 const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
@@ -45,10 +53,16 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
     onAlertClick,
     onAlertDismiss,
     onAlertAcknowledge,
+    processesEnabled,
+    components,
+    dependencies,
+    workflows,
+    impactedComponentIds,
     className,
     ...props 
   }, ref) => {
     const [lastUpdate, setLastUpdate] = React.useState(new Date());
+    const [activeSubTab, setActiveSubTab] = React.useState<'assets' | 'processes'>('processes');
     
     // Auto refresh every 30 seconds if enabled
     React.useEffect(() => {
@@ -195,6 +209,18 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
 
     // Expansion state for root alerts
     const [expandedRoots, setExpandedRoots] = React.useState<Set<string>>(new Set());
+    // Default: expand all root alerts when the alert list changes
+    React.useEffect(() => {
+      const next = new Set<string>();
+      // Expand only real roots (non-child entries that are root alerts)
+      others.forEach(a => {
+        if (isRootAlert(a)) {
+          const rk = getRootKeyFromRootAlert(a);
+          if (rk) next.add(rk);
+        }
+      });
+      setExpandedRoots(next);
+    }, [alerts]);
     const toggleRoot = (rootKey: string) => {
       setExpandedRoots(prev => {
         const next = new Set(prev);
@@ -203,29 +229,87 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       });
     };
 
+    const canShowProcesses = Boolean(processesEnabled && components && dependencies && workflows && impactedComponentIds);
+
+    // Compute impacted processes when data is available
+    const { impactedProcessesCount, totalProcesses } = React.useMemo(() => {
+      if (!canShowProcesses || !workflows || !impactedComponentIds) {
+        return { impactedProcessesCount: 0, totalProcesses: 0 };
+      }
+
+      const isStepImpacted = (step: BusinessWorkflow["steps"][number]): boolean => {
+        const primaries = step.primaryComponentIds && step.primaryComponentIds.length
+          ? step.primaryComponentIds
+          : (step.primaryComponentId ? [step.primaryComponentId] : []);
+        return primaries.some(id => impactedComponentIds.has(id));
+      };
+
+      const isWorkflowImpacted = (wf: BusinessWorkflow): boolean => {
+        return wf.steps.some(isStepImpacted);
+      };
+
+      const total = workflows.length;
+      const impacted = workflows.filter(isWorkflowImpacted).length;
+      return { impactedProcessesCount: impacted, totalProcesses: total };
+    }, [canShowProcesses, workflows, impactedComponentIds]);
+
     return (
-      <Card ref={ref} className={cn("bg-card border-border shadow-depth", className)} {...props}>
+      <Card ref={ref} className={cn("bg-card border-border shadow-depth flex flex-col h-full", className)} {...props}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
               <span>Active Alerts</span>
-              {alerts.length > 0 && (
-                <Badge variant="outline" className="ml-2">
-                  {alerts.length}
-                </Badge>
-              )}
             </CardTitle>
-            
-            {autoRefresh && (
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                <Clock className="w-3 h-3" />
-                <span>Updated {formatTimeAgo(lastUpdate)}</span>
+            {canShowProcesses && (
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-background/40 backdrop-blur-md p-0.5 text-xs shadow-sm">
+                <button
+                  type="button"
+                  aria-label="Show processes"
+                  aria-pressed={activeSubTab === 'processes'}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-full font-medium transition-all",
+                    activeSubTab === 'processes'
+                      ? "bg-primary/90 text-primary-foreground shadow ring-1 ring-white/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  )}
+                  onClick={() => setActiveSubTab('processes')}
+                >
+                  Processes
+                </button>
+                <button
+                  type="button"
+                  aria-label="Show assets"
+                  aria-pressed={activeSubTab === 'assets'}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-full font-medium transition-all",
+                    activeSubTab === 'assets'
+                      ? "bg-primary/90 text-primary-foreground shadow ring-1 ring-white/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  )}
+                  onClick={() => setActiveSubTab('assets')}
+                >
+                  Assets
+                </button>
               </div>
             )}
+
+            {/* Removed timestamp display */}
           </div>
           
-          {(criticalCount > 0 || warningCount > 0) && (
+          {canShowProcesses && activeSubTab === 'processes' && impactedProcessesCount > 0 && (
+            <div className="flex items-center space-x-4 text-sm">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-destructive rounded-full" />
+                <span className="text-muted-foreground">{impactedProcessesCount} Impacted processes</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-muted-foreground rounded-full" />
+                <span className="text-muted-foreground">{totalProcesses} Total</span>
+              </div>
+            </div>
+          )}
+          {activeSubTab === 'assets' && (criticalCount > 0 || warningCount > 0) && (
             <div className="flex items-center space-x-4 text-sm">
               {criticalCount > 0 && (
                 <div className="flex items-center space-x-1">
@@ -243,15 +327,34 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
           )}
         </CardHeader>
         
-        <CardContent className="pt-0">
-          {visibleAlerts.length === 0 ? (
-            <div className="h-[60vh] flex flex-col items-center justify-center text-muted-foreground">
+        <CardContent className="pt-0 flex-1 min-h-0 flex flex-col">
+          {canShowProcesses && activeSubTab === 'processes' ? (
+            impactedProcessesCount === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+                <CheckCircle className="w-8 h-8 mb-2 text-success" />
+                <p>All systems operational</p>
+                <p className="text-xs mt-1">No active alerts</p>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <ProcessImpactPanel
+                  components={components!}
+                  dependencies={dependencies!}
+                  workflows={workflows!}
+                  impactedComponentIds={impactedComponentIds!}
+                  embedded
+                  className="border-0 shadow-none"
+                />
+              </div>
+            )
+          ) : visibleAlerts.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
               <CheckCircle className="w-8 h-8 mb-2 text-success" />
               <p>All systems operational</p>
               <p className="text-xs mt-1">No active alerts</p>
             </div>
           ) : (
-            <div className="space-y-3 h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
               {visibleAlerts.map(({ alert, isChild }) => {
                 const SeverityIcon = getSeverityIcon(alert.severity);
                 const rootKey = isChild
@@ -266,7 +369,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                   <div
                     key={alert.id}
                     className={cn(
-                      "p-3 rounded-lg border transition-all duration-200",
+                      "relative p-2 rounded-lg border transition-all duration-200",
                       alert.acknowledged 
                         ? "bg-muted/30 border-muted" 
                         : "bg-background border-border hover:bg-accent/10",
@@ -293,7 +396,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                         <SeverityIcon className={cn("w-4 h-4 mt-0.5", getSeverityColor(alert.severity))} />
                         
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-1">
+                          <div className="flex items-center space-x-2 mb-0.5">
                             <p className="font-medium text-foreground text-sm truncate">
                               {alert.title}
                             </p>
@@ -315,7 +418,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                             })()}
                           </div>
                           
-                          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                          <p className="text-xs text-muted-foreground line-clamp-2">
                             {sanitizeMessage(alert)}
                           </p>
                           {/* Removed impacted subtitle; details visible when expanded */}
@@ -331,31 +434,20 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                             </div>
                           )}
                           
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                              {alert.component && (
-                                <span className="font-medium">{alert.component}</span>
-                              )}
-                              <span>•</span>
-                              <span>{formatTimeAgo(alert.timestamp)}</span>
-                            </div>
-                            
-                            <div className="flex items-center space-x-1">
-                              {alert.actionUrl && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(alert.actionUrl, '_blank');
-                                  }}
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
+                          {/* Third metadata line (component • time) removed for compactness */}
+                          {alert.actionUrl && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 absolute top-2 right-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(alert.actionUrl, '_blank');
+                              }}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

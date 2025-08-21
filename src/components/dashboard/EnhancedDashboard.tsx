@@ -1,29 +1,12 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TrendCard } from "@/components/ui/trend-card";
-import { InteractiveChart, ChartDataPoint } from "@/components/ui/interactive-chart";
 import { AlertPanel, AlertType as Alert } from "@/components/ui/alert-panel";
 import { NetworkTopology } from "@/components/ui/network-topology";
+import { Badge } from "@/components/ui/badge";
 import { useItiacStore } from "@/store/useItiacStore";
 import { AuditService } from "@/services/auditService";
 import { computeImpactedFromOfflines, buildForwardMap, traverseDownstream } from "@/lib/utils";
 
-import { 
-  Server, 
-  Network, 
-  Shield, 
-  TrendingUp,
-  Users,
-  Activity,
-  Zap,
-  Clock,
-  Database,
-  Globe,
-  Settings,
-  RefreshCw
-} from "lucide-react";
+import { Server } from "lucide-react";
 
 type EnhancedDashboardProps = {
   onQuickNav?: (pageId: string) => void;
@@ -33,8 +16,8 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   const components = useItiacStore((s) => s.components);
   const dependencies = useItiacStore((s) => s.dependencies);
   const workflows = useItiacStore((s) => s.workflows);
+  // workflows removed from this view after layout simplification
   
-  const [timeRange, setTimeRange] = useState<"1h" | "24h" | "7d" | "30d">("24h");
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -58,89 +41,24 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
 
   // Calculate metrics
   const totalComponents = components.length;
-  const onlineCount = components.filter(c => c.status === 'online').length;
-  const warningCount = components.filter(c => c.status === 'warning').length;
-  const offlineCount = components.filter(c => c.status === 'offline').length;
-  const maintenanceCount = components.filter(c => c.status === 'maintenance').length;
+  // per-status counts no longer needed in this component
 
   // Derive cascading impact via shared downstream-only utility
   const impactedFromOfflines = computeImpactedFromOfflines(components, dependencies);
   const effectiveOnlineCount = components.filter(c => c.status === 'online' && !impactedFromOfflines.has(c.id)).length;
   const effectiveOfflineCount = components.filter(c => c.status === 'offline' || impactedFromOfflines.has(c.id)).length;
+  // Impacted component set for processes view = offline roots + all downstream impacted
+  const impactedComponentIds = new Set<string>([
+    ...components.filter(c => c.status === 'offline').map(c => c.id),
+    ...Array.from(impactedFromOfflines)
+  ]);
 
   const totalDependencies = dependencies.length;
   const criticalPaths = dependencies.filter(d => d.criticality === 'critical').length;
-  const totalWorkflows = workflows.length;
-  const uniqueBusinessProcesses = Array.from(new Set(workflows.map(w => w.businessProcess))).length;
+  // workflow-related KPIs removed
 
   const networkHealth = totalComponents > 0 ? ((effectiveOnlineCount / totalComponents) * 100) : 0;
   // Business impact KPI removed from UI
-
-  // Generate health trend from audit logs: percent of assets Online at each time bucket
-  const generateHealthTrendData = (hours: number): ChartDataPoint[] => {
-    const data: ChartDataPoint[] = [];
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - hours * 60 * 60 * 1000);
-    const auditLogs = AuditService.getLogs(undefined, 'COMPONENT', undefined, windowStart, now);
-
-    // Index logs by component
-    const logsByComp = new Map<string, typeof auditLogs>();
-    auditLogs.forEach(log => {
-      if (!log.entityId) return;
-      const list = logsByComp.get(log.entityId) || [];
-      list.push(log);
-      logsByComp.set(log.entityId, list);
-    });
-    // Sort each list ascending by time
-    logsByComp.forEach(list => list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
-
-    // Pre-build forward dependency map for cascade computation (static over time window)
-    const forward = buildForwardMap(dependencies);
-
-    for (let i = hours; i >= 0; i--) {
-      const ts = new Date(now.getTime() - i * 60 * 60 * 1000);
-      const hourStart = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate(), ts.getHours(), 0, 0, 0);
-
-      // Determine status at this time per component by last change before ts
-      const statusAtTime = new Map<string, string>();
-      components.forEach(c => {
-        const compLogs = logsByComp.get(c.id) || [];
-        // find last log <= ts
-        let s: any = undefined;
-        for (let idx = compLogs.length - 1; idx >= 0; idx--) {
-          const lg = compLogs[idx];
-          if (lg.timestamp <= ts) {
-            s = lg.changes?.after?.status ?? lg.details?.status;
-            break;
-          }
-        }
-        statusAtTime.set(c.id, (s as string) || 'online');
-      });
-
-      // Roots for cascade are offline assets at this time
-      const offlineRoots = components.filter(c => statusAtTime.get(c.id) === 'offline').map(c => c.id);
-      const offlineSet = new Set(offlineRoots);
-      const impacted = traverseDownstream(offlineSet, forward, offlineSet);
-
-      // Count effective online excluding impacted
-      let effectiveOnlineAtTime = 0;
-      components.forEach(c => {
-        const s = statusAtTime.get(c.id) || 'online';
-        if (s === 'online' && !impacted.has(c.id)) effectiveOnlineAtTime += 1;
-      });
-
-      const health = totalComponents > 0 ? (effectiveOnlineAtTime / totalComponents) * 100 : 0;
-      data.push({
-        timestamp: hourStart.toISOString(),
-        value: Math.round(health * 10) / 10,
-        label: hourStart.toLocaleTimeString(),
-        status: health > 95 ? 'success' : health > 85 ? 'warning' : 'destructive'
-      });
-    }
-    return data;
-  };
-
-  const healthTrendData = generateHealthTrendData(timeRange === "1h" ? 1 : timeRange === "24h" ? 24 : timeRange === "7d" ? 168 : 720);
 
   // Generate real alerts from component status and audit logs
   const generateRealAlerts = (): Alert[] => {
@@ -340,7 +258,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   // Refresh alerts when data changes (no filtering/preservation)
   useEffect(() => {
     setActiveAlerts(generateRealAlerts());
-  }, [components, dependencies, workflows, lastRefresh]);
+  }, [components, dependencies, lastRefresh]);
 
   const handleAlertClick = (alert: Alert) => {
     // Use actionUrl hash to pre-filter target pages
@@ -372,84 +290,46 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header with System Status and Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Badge
-            variant={networkHealth > 95 ? "success" : networkHealth > 85 ? "warning" : "destructive"}
-            className="text-base px-4 py-2"
-          >
-            {networkHealth > 95 ? "System Operational" : networkHealth > 85 ? "Degraded Performance" : "System Issues"}
-          </Badge>
-          
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Clock className="w-4 h-4" />
-            <span>Last updated: {lastRefresh.toLocaleTimeString()}</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <div className="flex space-x-1">
-            {(["1h", "24h", "7d", "30d"] as const).map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "default" : "ghost"}
-                size="sm"
-                className="h-8 px-3 text-xs"
-                onClick={() => setTimeRange(range)}
-              >
-                {range.toUpperCase()}
-              </Button>
-            ))}
-          </div>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-          >
-            <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-4">
+      
 
-      {/* Enhanced KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-        <TrendCard
-          title="System Health"
-          value={`${networkHealth.toFixed(1)}%`}
-          trend={networkHealth > 95 ? "up" : networkHealth > 85 ? "stable" : "down"}
-          change={networkHealth > 95 ? "+0.2%" : networkHealth > 85 ? "stable" : "-1.5%"}
-          icon={Activity}
-          variant={networkHealth > 95 ? "success" : networkHealth > 85 ? "default" : "warning"}
-          interactive
-          onDrillDown={() => onQuickNav?.("analysis")}
-        />
-        
-        <TrendCard
-          title="IT Assets"
-          value={`${effectiveOnlineCount}/${totalComponents}`}
-          trend={effectiveOnlineCount === totalComponents ? "up" : effectiveOfflineCount > 0 ? "down" : "stable"}
-          change={effectiveOnlineCount === totalComponents ? "All Online" : `${effectiveOfflineCount} Offline (incl. impacted)`}
-          icon={Server}
-          variant={effectiveOnlineCount === totalComponents ? "success" : effectiveOfflineCount > 0 ? "destructive" : "warning"}
-          interactive
-          tooltip="Offline includes impacted by downstream outages"
-          onDrillDown={() => onQuickNav?.("components")}
-        />
-        
-        {/* Response Time, Critical Paths, and Business Impact cards removed */}
-      </div>
+      {/* Removed standalone KPI grid; IT Assets moved to right column above topology */}
 
       {/* Main Visualization Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Network Topology */}
-        <div className="lg:col-span-2">
-          <NetworkTopology
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch h-[calc(100vh-2rem)] overflow-hidden">
+        {/* Alert Panel - dominant (2 columns); inner card manages height/scroll */}
+        <div className="lg:col-span-2 h-full overflow-hidden">
+          <AlertPanel
+            alerts={activeAlerts}
+            maxVisible={12}
+            autoRefresh={autoRefresh}
+            onAlertClick={handleAlertClick}
+            onAlertDismiss={handleAlertDismiss}
+            onAlertAcknowledge={handleAlertAcknowledge}
+            processesEnabled={true}
             components={components}
             dependencies={dependencies}
+            workflows={workflows}
+            impactedComponentIds={impactedComponentIds}
+          />
+        </div>
+
+        {/* Right column: Network Topology with IT Assets KPI in header */}
+        <div className="lg:col-span-1 h-full overflow-hidden">
+          <NetworkTopology
+            components={components.filter(c => c.status === 'offline' || impactedFromOfflines.has(c.id))}
+            dependencies={dependencies}
+            rightExtra={
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">IT Assets</span>
+                <Badge
+                  variant={effectiveOnlineCount === totalComponents ? "success" : effectiveOfflineCount > 0 ? "destructive" : "warning"}
+                  className="px-2 py-0.5 text-xs"
+                >
+                  {`${effectiveOnlineCount}/${totalComponents}`}
+                </Badge>
+              </div>
+            }
             onNodeClick={(component) => {
               // Log the interaction
               AuditService.log('UPDATE', 'SYSTEM', { 
@@ -469,135 +349,9 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
             }}
           />
         </div>
-        
-        {/* Alert Panel */}
-        <div>
-          <AlertPanel
-            alerts={activeAlerts}
-            maxVisible={6}
-            autoRefresh={autoRefresh}
-            onAlertClick={handleAlertClick}
-            onAlertDismiss={handleAlertDismiss}
-            onAlertAcknowledge={handleAlertAcknowledge}
-          />
-        </div>
       </div>
 
-      {/* Charts and Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* System Health Trends */}
-        <InteractiveChart
-          title="System Health Trends"
-          data={healthTrendData}
-          type="area"
-          timeRange={timeRange}
-          strokeColor="hsl(var(--success))"
-          fillColor="hsl(var(--success))"
-          fillOpacity={0.28}
-          onTimeRangeChange={(range) => {
-            setTimeRange(range as "1h" | "24h" | "7d" | "30d");
-            AuditService.log('UPDATE', 'SYSTEM', { action: 'timerange_changed', range });
-          }}
-          onDataPointClick={(point) => {
-            AuditService.log('UPDATE', 'SYSTEM', { 
-              action: 'chart_datapoint_clicked', 
-              timestamp: point.timestamp, 
-              value: point.value 
-            });
-            // Could navigate to detailed analysis for that time period
-            onQuickNav?.("analysis");
-          }}
-          icon={Activity}
-          showTrend
-          realTime={autoRefresh}
-        />
-        
-        {/* Quick Actions */}
-        <Card className="bg-card border-border shadow-depth">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-primary" />
-              <span>Quick Actions</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                className="h-12 bg-gradient-primary hover:opacity-90" 
-                onClick={() => {
-                  AuditService.logAnalysisRun('dashboard-quick-action', totalComponents, 0);
-                  onQuickNav?.("analysis");
-                }}
-                disabled={totalComponents === 0}
-              >
-                <Shield className="w-5 h-5 mr-2" />
-                Run Analysis
-              </Button>
-              
-              <Button 
-                variant="secondary" 
-                className="h-12" 
-                onClick={() => {
-                  AuditService.log('UPDATE', 'SYSTEM', { action: 'quick_nav_add_asset' });
-                  onQuickNav?.("components");
-                }}
-              >
-                <Server className="w-5 h-5 mr-2" />
-                Add Asset
-              </Button>
-              
-              <Button 
-                variant="secondary" 
-                className="h-12" 
-                onClick={() => {
-                  AuditService.log('UPDATE', 'SYSTEM', { action: 'quick_nav_network' });
-                  onQuickNav?.("dependencies");
-                }}
-                disabled={dependencies.length === 0}
-              >
-                <Network className="w-5 h-5 mr-2" />
-                View Network
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="h-12" 
-                onClick={() => {
-                  AuditService.logExport('dashboard-report', 'system-report.pdf', totalComponents + totalDependencies + totalWorkflows);
-                  onQuickNav?.("workflows");
-                }}
-                disabled={totalComponents === 0}
-              >
-                <TrendingUp className="w-5 h-5 mr-2" />
-                Generate Report
-              </Button>
-            </div>
-            
-            {/* System Overview Stats */}
-            <div className="mt-6 pt-4 border-t border-border">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <Database className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Dependencies:</span>
-                  <span className="font-medium">{totalDependencies}</span>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Processes:</span>
-                  <span className="font-medium">{uniqueBusinessProcesses}</span>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Settings className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Maintenance:</span>
-                  <span className="font-medium">{maintenanceCount}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Charts section removed */}
     </div>
   );
 };

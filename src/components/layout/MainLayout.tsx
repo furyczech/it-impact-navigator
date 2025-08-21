@@ -9,10 +9,10 @@ interface MainLayoutProps {
 
 export const MainLayout = ({ children, currentPage, onNavigate }: MainLayoutProps) => {
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
-      <div className="flex-1 flex flex-col">
-        <main className="flex-1 px-2 md:px-4 py-4 md:py-6 overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 h-full overflow-hidden min-h-0 p-0">
           {children}
         </main>
       </div>

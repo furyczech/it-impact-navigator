@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useItiacStore } from "@/store/useItiacStore";
 import { AuditService } from "@/services/auditService";
 
@@ -8,11 +7,7 @@ import {
   Server, 
   Network, 
   AlertTriangle, 
-  Shield, 
-  TrendingUp,
-  Users,
-  Activity,
-  Zap
+  Users
 } from "lucide-react";
 
 type DashboardOverviewProps = {
@@ -155,75 +150,6 @@ export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* System Health Overview (moved up) */}
-        <Card className="bg-card border-border shadow-depth">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Activity className="w-5 h-5 text-primary" />
-              <span>System Health Overview</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-network rounded-full flex items-center justify-center">
-                  <Network className="w-10 h-10 text-primary-foreground" />
-                </div>
-                <h3 className="font-semibold text-foreground">Network Health</h3>
-                <p className="text-2xl font-bold text-success mt-1">{networkHealth.toFixed(1)}%</p>
-                <p className="text-sm text-muted-foreground">{criticalPaths === 0 ? 'All critical paths operational' : `${criticalPaths} critical paths`}</p>
-              </div>
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
-                  <Server className="w-10 h-10 text-primary-foreground" />
-                </div>
-                <h3 className="font-semibold text-foreground">IT Asset Status</h3>
-                <p className="text-2xl font-bold text-success mt-1">{onlineCount}/{totalComponents}</p>
-                <p className="text-sm text-muted-foreground">IT assets online</p>
-              </div>
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-4 bg-warning/10 rounded-full flex items-center justify-center border border-warning/20">
-                  <AlertTriangle className="w-10 h-10 text-warning" />
-                </div>
-                <h3 className="font-semibold text-foreground">Risk Assessment</h3>
-                <p className="text-2xl font-bold text-warning mt-1">{riskLabel}</p>
-                <p className="text-sm text-muted-foreground">{issuesCount} potential issues detected</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions (keep on right) */}
-        <Card className="bg-card border-border shadow-depth">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-primary" />
-              <span>Quick Actions</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <Button className="w-full justify-start h-12 bg-gradient-primary hover:opacity-90" onClick={() => onQuickNav && onQuickNav('analysis')}>
-                <Shield className="w-5 h-5 mr-3" />
-                Run Impact Analysis
-              </Button>
-              <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('components')}>
-                <Server className="w-5 h-5 mr-3" />
-                Add IT Asset
-              </Button>
-              <Button variant="secondary" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('dependencies')}>
-                <Network className="w-5 h-5 mr-3" />
-                View Network Map
-              </Button>
-              <Button variant="outline" className="w-full justify-start h-12" onClick={() => onQuickNav && onQuickNav('workflows')}>
-                <TrendingUp className="w-5 h-5 mr-3" />
-                Generate Report
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Incident History */}
       <Card className="bg-card border-border shadow-depth">
