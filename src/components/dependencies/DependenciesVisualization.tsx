@@ -37,32 +37,39 @@ const criticalityColors = {
   critical: "border-destructive"
 };
 
+// Chip styles for criticality labels
+const critChipClasses: Record<'low'|'medium'|'high'|'critical', string> = {
+  low: "bg-muted text-foreground/70",
+  medium: "bg-primary/10 text-primary",
+  high: "bg-warning/10 text-warning",
+  critical: "bg-destructive/10 text-destructive",
+};
+
 export const DependenciesVisualization = () => {
   const components = useItiacStore((s) => s.components);
   const dependencies = useItiacStore((s) => s.dependencies);
   const addDependency = useItiacStore((s) => s.addDependency);
   const deleteDependency = useItiacStore((s) => s.deleteDependency);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<"all" | "critical" | "offline">("all");
   const [isDepDialogOpen, setIsDepDialogOpen] = useState(false);
-  const [newDependency, setNewDependency] = useState({ sourceId: "", targetId: "", type: "", criticality: "" });
+  const [newDependency, setNewDependency] = useState({ sourceId: "", targetId: "", criticality: "" });
   // New controls
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [groupBy, setGroupBy] = useState<'none'|'type'|'criticality'>('none');
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
   const [layoutTrigger, setLayoutTrigger] = useState(0);
-  const [nodeTypeFilter, setNodeTypeFilter] = useState<string>('all');
-  const [nodeCritFilter, setNodeCritFilter] = useState<'all'|'low'|'medium'|'high'|'critical'>('all');
-  const [edgeTypeFilter, setEdgeTypeFilter] = useState<string>('all');
-  const [edgeCritFilter, setEdgeCritFilter] = useState<'all'|'low'|'medium'|'high'|'critical'>('all');
-  // Layout controls
-  const [layoutEngine, setLayoutEngine] = useState<'internal'|'dagre'|'elk'>('internal');
-  const [direction, setDirection] = useState<'LR'|'TB'>('TB');
+  // Post-edge creation config dialog
+  const [depConfigOpen, setDepConfigOpen] = useState(false);
+  const [pendingEdge, setPendingEdge] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [pendingCrit, setPendingCrit] = useState<'low'|'medium'|'high'|'critical'>('medium');
+  // Map visibility toggle
+  const [showAll, setShowAll] = useState(false);
   // Manage dialog state for per-asset dependency details
   const [manageOpen, setManageOpen] = useState(false);
   const [manageComponentId, setManageComponentId] = useState<string | null>(null);
   // Assets search
   const [assetSearch, setAssetSearch] = useState("");
+  // Assets sort
+  const [assetSort, setAssetSort] = useState<'name'|'status'|'criticality'|'deps'>('name');
   // Delete dependency confirm
   const [depDeleteOpen, setDepDeleteOpen] = useState(false);
   const [depToDelete, setDepToDelete] = useState<string | null>(null);
@@ -73,37 +80,43 @@ export const DependenciesVisualization = () => {
     return { incoming, outgoing };
   }, [dependencies]);
 
-  const getFilteredComponents = useCallback(() => {
-    switch (viewMode) {
-      case "critical":
-        return components.filter(c => c.criticality === "critical");
-      case "offline":
-        return components.filter(c => c.status === "offline" || c.status === "warning");
-      default:
-        return components;
-    }
-  }, [components, viewMode]);
+  const getFilteredComponents = useCallback(() => components, [components]);
 
   const filteredComponents = getFilteredComponents().filter(c =>
     c.name.toLowerCase().includes(assetSearch.toLowerCase())
   );
 
-  // Components shown in map: only selected if 2+ selected, otherwise fallback to filtered set
-  const mapComponents = selectedIds.size >= 2
-    ? components.filter(c => selectedIds.has(c.id))
-    : filteredComponents;
+  const sortedComponents = useMemo(() => {
+    const clone = [...filteredComponents];
+    switch (assetSort) {
+      case 'status':
+        return clone.sort((a, b) => String(a.status).localeCompare(String(b.status)) || a.name.localeCompare(b.name));
+      case 'criticality':
+        const order: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+        return clone.sort((a, b) => (order[a.criticality] - order[b.criticality]) || a.name.localeCompare(b.name));
+      case 'deps':
+        const counts = (c: any) => {
+          const incoming = dependencies.filter(d => d.targetId === c.id).length;
+          const outgoing = dependencies.filter(d => d.sourceId === c.id).length;
+          return incoming + outgoing;
+        };
+        return clone.sort((a, b) => counts(b) - counts(a) || a.name.localeCompare(b.name));
+      default:
+        return clone.sort((a, b) => a.name.localeCompare(b.name));
+    }
+  }, [filteredComponents, assetSort, dependencies]);
+
+  // Components shown in map
+  // - Default: none
+  // - When some are selected in the left list: show selected
+  // - When "View all" is enabled: show all (respecting current filters)
+  const mapComponents = showAll
+    ? sortedComponents
+    : (selectedIds.size > 0
+        ? components.filter(c => selectedIds.has(c.id))
+        : []);
 
   const clearSelection = () => setSelectedIds(new Set());
-
-  // Options for filters
-  const componentTypes = useMemo(() => Array.from(new Set(components.map(c => String(c.type)))).sort(), [components]);
-  const dependencyTypes = useMemo(() => Array.from(new Set(dependencies.map(d => String(d.type)))).sort(), [dependencies]);
-  const filters = useMemo(() => ({
-    nodeTypes: nodeTypeFilter !== 'all' ? [nodeTypeFilter] : [],
-    nodeCriticalities: nodeCritFilter !== 'all' ? [nodeCritFilter] as any : [],
-    edgeTypes: edgeTypeFilter !== 'all' ? [edgeTypeFilter] : [],
-    edgeCriticalities: edgeCritFilter !== 'all' ? [edgeCritFilter] as any : [],
-  }), [nodeTypeFilter, nodeCritFilter, edgeTypeFilter, edgeCritFilter]);
 
   return (
     <div className="space-y-6">
@@ -115,91 +128,8 @@ export const DependenciesVisualization = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full">
-          {/* Centered filters */}
-          <div className="flex flex-nowrap items-center gap-2 mx-auto overflow-x-auto">
-          {/* Grouping */}
-          <Select value={groupBy} onValueChange={(v: any) => { setGroupBy(v); setLayoutTrigger(x=>x+1); }}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Group by" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No Grouping</SelectItem>
-              <SelectItem value="type">Group by Type</SelectItem>
-              <SelectItem value="criticality">Group by Criticality</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Layout Engine */}
-          <Select value={layoutEngine} onValueChange={(v: any) => { setLayoutEngine(v); setLayoutTrigger(x=>x+1); }}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Layout engine" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="internal">Internal</SelectItem>
-              <SelectItem value="dagre">Dagre</SelectItem>
-              <SelectItem value="elk">ELK</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Direction */}
-          <Select value={direction} onValueChange={(v: any) => { setDirection(v); setLayoutTrigger(x=>x+1); }}>
-            <SelectTrigger className="w-36"><SelectValue placeholder="Direction" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="TB">Top-Bottom</SelectItem>
-              <SelectItem value="LR">Left-Right</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Node Type */}
-          <Select value={nodeTypeFilter} onValueChange={(v) => { setNodeTypeFilter(v); setLayoutTrigger(x=>x+1); }}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Node type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Node Types</SelectItem>
-              {componentTypes.map(t => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
-            </SelectContent>
-          </Select>
-
-          {/* Node Criticality */}
-          <Select value={nodeCritFilter} onValueChange={(v: any) => { setNodeCritFilter(v); setLayoutTrigger(x=>x+1); }}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Node criticality" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Node Criticalities</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Edge Type */}
-          <Select value={edgeTypeFilter} onValueChange={(v) => setEdgeTypeFilter(v)}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Edge type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Edge Types</SelectItem>
-              {dependencyTypes.map(t => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
-            </SelectContent>
-          </Select>
-
-          {/* Edge Criticality */}
-          <Select value={edgeCritFilter} onValueChange={(v: any) => setEdgeCritFilter(v)}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Edge criticality" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Edge Criticalities</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* View mode (existing) */}
-          <Select value={viewMode} onValueChange={(value: "all" | "critical" | "offline") => setViewMode(value)}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All IT Assets</SelectItem>
-              <SelectItem value="critical">Critical Only</SelectItem>
-              <SelectItem value="offline">Issues Only</SelectItem>
-            </SelectContent>
-          </Select>
-          </div>
+          {/* Filters removed per request */}
+          <div className="h-2" />
           {/* Actions: only '+ Add Dependency' right-aligned */}
           <div className="flex items-center gap-2 ml-auto shrink-0">
             <Dialog open={isDepDialogOpen} onOpenChange={setIsDepDialogOpen}>
@@ -238,17 +168,6 @@ export const DependenciesVisualization = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={newDependency.type} onValueChange={(value) => setNewDependency({...newDependency, type: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select dependency type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="requires">Requires</SelectItem>
-                      <SelectItem value="uses">Uses</SelectItem>
-                      <SelectItem value="feeds">Feeds</SelectItem>
-                      <SelectItem value="monitors">Monitors</SelectItem>
-                    </SelectContent>
-                  </Select>
                   <Select value={newDependency.criticality} onValueChange={(value) => setNewDependency({...newDependency, criticality: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select criticality" />
@@ -266,17 +185,17 @@ export const DependenciesVisualization = () => {
                   <div className="flex justify-end space-x-2 pt-4">
                     <Button variant="outline" onClick={() => setIsDepDialogOpen(false)}>Cancel</Button>
                     <Button
-                      disabled={!(newDependency.sourceId && newDependency.targetId && newDependency.type && newDependency.criticality) || newDependency.sourceId === newDependency.targetId}
+                      disabled={!(newDependency.sourceId && newDependency.targetId && newDependency.criticality) || newDependency.sourceId === newDependency.targetId}
                       onClick={() => {
                         const dependency: ComponentDependency = {
                           id: Date.now().toString(),
                           sourceId: newDependency.sourceId,
                           targetId: newDependency.targetId,
-                          type: newDependency.type as any,
+                          type: 'uses' as any,
                           criticality: newDependency.criticality as any
                         };
                         addDependency(dependency);
-                        setNewDependency({ sourceId: "", targetId: "", type: "", criticality: "" });
+                        setNewDependency({ sourceId: "", targetId: "", criticality: "" });
                         setIsDepDialogOpen(false);
                       }}
                     >
@@ -316,22 +235,43 @@ export const DependenciesVisualization = () => {
                   placeholder="Search assets..."
                   className="h-8 text-xs"
                 />
-                {selectedIds.size > 0 && (
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Selected: {selectedIds.size}</span>
-                    <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+                {/* tip removed per request */}
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{sortedComponents.length} items</span>
+                    {selectedIds.size > 0 && (
+                      <span className="text-muted-foreground">• {selectedIds.size} selected</span>
+                    )}
                   </div>
-                )}
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted-foreground">Sort:</span>
+                    <Select value={assetSort} onValueChange={(v: any) => setAssetSort(v)}>
+                      <SelectTrigger className="h-7 w-[140px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Name (A–Z)</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                        <SelectItem value="criticality">Criticality</SelectItem>
+                        <SelectItem value="deps">Connections</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {selectedIds.size > 0 && (
+                      <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="mt-2 space-y-3 overflow-y-auto pr-1">
-                {filteredComponents.map((component) => {
+              <div className="mt-2 space-y-2 overflow-y-auto pr-1">
+                {sortedComponents.length === 0 && (
+                  <div className="text-xs text-muted-foreground py-8 text-center border rounded-md">No assets match your search/filter.</div>
+                )}
+                {sortedComponents.map((component) => {
                   const deps = getComponentDependencies(component.id);
                   const isSelected = selectedIds.has(component.id);
                   return (
                     <div
                       key={component.id}
-                      className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                        isSelected ? "border-primary bg-primary/10" : criticalityColors[component.criticality]
+                      className={`group relative p-3 rounded-md border cursor-pointer transition-colors bg-card/40 hover:bg-card/70 ${
+                        isSelected ? "ring-2 ring-primary border-transparent bg-primary/5" : "border-border"
                       }`}
                       onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                         if (e.ctrlKey) {
@@ -341,26 +281,32 @@ export const DependenciesVisualization = () => {
                             return next;
                           });
                         } else {
-                          // single-select fallback
+                          // single-select fallback + open manage dialog
                           setSelectedIds(new Set([component.id]));
+                          setManageComponentId(component.id);
+                          setManageOpen(true);
                         }
                       }}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium text-foreground">{component.name}</span>
-                            <div className={`w-2 h-2 rounded-full ${statusColors[component.status].replace('text-', 'bg-')}`} />
+                      {/* Left status accent bar */}
+                      <span
+                        className={`absolute left-0 top-0 h-full w-1 rounded-l-md ${statusColors[component.status].replace('text-', 'bg-')}`}
+                        aria-hidden
+                      />
+                      <div className="flex items-start justify-between gap-3 pl-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium text-foreground" title={component.name}>{component.name}</span>
                           </div>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              {component.type}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {deps.incoming.length} in • {deps.outgoing.length} out
+                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                            <Badge variant="outline" className="text-2xs capitalize">{component.type}</Badge>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${critChipClasses[component.criticality as 'low'|'medium'|'high'|'critical']}`}>
+                              {component.criticality}
                             </span>
+                            <span>{deps.incoming.length} in • {deps.outgoing.length} out</span>
                           </div>
                         </div>
+                        {/* manage button removed per request */}
                       </div>
                     </div>
                   );
@@ -392,6 +338,9 @@ export const DependenciesVisualization = () => {
             <div className="relative">
               {/* Overlay controls at top-right of the map */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setShowAll(v => !v); setFitViewTrigger(x=>x+1); }}>
+                  {showAll ? 'Hide all' : 'View all'}
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)} aria-label="Fit to view">
                   <Focus className="w-4 h-4 mr-1" /> Fit to view
                 </Button>
@@ -402,21 +351,12 @@ export const DependenciesVisualization = () => {
               <DependencyNetworkFlow 
                 components={mapComponents}
                 dependencies={dependencies}
-                groupBy={groupBy}
-                filters={filters}
                 layoutTrigger={layoutTrigger}
                 fitViewTrigger={fitViewTrigger}
-                layoutEngine={layoutEngine}
-                direction={direction}
                 onAddDependency={(sourceId: string, targetId: string) => {
-                  const dependency: ComponentDependency = {
-                    id: Date.now().toString(),
-                    sourceId,
-                    targetId,
-                    type: "uses",
-                    criticality: "medium"
-                  };
-                  addDependency(dependency);
+                  setPendingEdge({ sourceId, targetId });
+                  setPendingCrit('medium');
+                  setDepConfigOpen(true);
                 }}
               />
             </div>
@@ -444,9 +384,12 @@ export const DependenciesVisualization = () => {
               <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
             </div>
           </div>
-          <div className="relative h-[calc(92vh-72px)]">
+          <div className="relative">
             {/* Overlay controls at top-right in fullscreen map */}
             <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setShowAll(v => !v); setFitViewTrigger(x=>x+1); }}>
+                {showAll ? 'Hide all' : 'View all'}
+              </Button>
               <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)}>
                 <Focus className="w-4 h-4 mr-1" /> Fit to view
               </Button>
@@ -457,24 +400,62 @@ export const DependenciesVisualization = () => {
             <DependencyNetworkFlow
               components={mapComponents}
               dependencies={dependencies}
-              groupBy={groupBy}
-              filters={filters}
               layoutTrigger={layoutTrigger}
               fitViewTrigger={fitViewTrigger}
               fullscreen
-              layoutEngine={layoutEngine}
-              direction={direction}
               onAddDependency={(sourceId: string, targetId: string) => {
-                const dependency: ComponentDependency = {
-                  id: Date.now().toString(),
-                  sourceId,
-                  targetId,
-                  type: "uses",
-                  criticality: "medium"
-                };
-                addDependency(dependency);
+                setPendingEdge({ sourceId, targetId });
+                setPendingCrit('medium');
+                setDepConfigOpen(true);
               }}
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-edge dependency configuration */}
+      <Dialog open={depConfigOpen} onOpenChange={setDepConfigOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Configure dependency</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* type note removed */}
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Criticality</span>
+              <Select value={pendingCrit} onValueChange={(v) => setPendingCrit(v as any)}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Select criticality" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setDepConfigOpen(false); setPendingEdge(null); }}>Cancel</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!pendingEdge) return;
+                  const dependency: ComponentDependency = {
+                    id: Date.now().toString(),
+                    sourceId: pendingEdge.sourceId,
+                    targetId: pendingEdge.targetId,
+                    type: "uses" as any,
+                    criticality: pendingCrit as any,
+                  };
+                  addDependency(dependency);
+                  setDepConfigOpen(false);
+                  setPendingEdge(null);
+                }}
+              >
+                Save
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -487,76 +468,100 @@ export const DependenciesVisualization = () => {
             if (!comp) return <div />;
             const { incoming, outgoing } = getComponentDependencies(comp.id);
             return (
-              <div className="space-y-3">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center justify-between">
-                    <span>Dependencies for {comp.name}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="capitalize">{comp.type}</Badge>
-                      <span>{incoming.length} in • {outgoing.length} out</span>
-                    </div>
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="flex items-center gap-2 justify-center">
-                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, type: "", criticality: "" }); setIsDepDialogOpen(true); }}>
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <DialogHeader className="p-0">
+                      <DialogTitle>Dependencies for {comp.name}</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-xs text-muted-foreground mt-1">Review and manage this asset's connections.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{comp.type}</Badge>
+                  </div>
+                </div>
+
+                {/* Quick actions */}
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, criticality: "" }); setIsDepDialogOpen(true); }}>
                     <Plus className="w-4 h-4 mr-1" /> Incoming
                   </Button>
-                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", type: "", criticality: "" }); setIsDepDialogOpen(true); }}>
+                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", criticality: "" }); setIsDepDialogOpen(true); }}>
                     <Plus className="w-4 h-4 mr-1" /> Outgoing
                   </Button>
                 </div>
+
+                {/* Content */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Incoming</p>
-                    <div className="mt-2 space-y-1">
-                      {incoming
-                        .map(dep => ({ dep, source: components.find(c => c.id === dep.sourceId) }))
-                        .map(({ dep, source }) => (
-                          <div key={dep.id} className="flex items-center justify-between text-sm rounded border p-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="truncate" title={source?.name}>{source?.name}</span>
-                              <Badge variant="outline" className="text-2xs">{dep.type}</Badge>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                              onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
-                              aria-label="Delete dependency"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      {incoming.length === 0 && (
-                        <p className="text-xs text-muted-foreground">None</p>
+                  {/* Incoming */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Incoming</h4>
+                    <div className="rounded-md border bg-card p-2">
+                      {incoming.length === 0 ? (
+                        <div className="text-xs text-muted-foreground flex items-center justify-between">
+                          <span>None</span>
+                          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {incoming.map((dep) => {
+                            const from = components.find(c => c.id === dep.sourceId);
+                            return (
+                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 py-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">{from?.name || dep.sourceId}</span>
+                                  {/* removed visible type badge */}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
+                                  aria-label="Delete dependency"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Outgoing</p>
-                    <div className="mt-2 space-y-1">
-                      {outgoing
-                        .map(dep => ({ dep, target: components.find(c => c.id === dep.targetId) }))
-                        .map(({ dep, target }) => (
-                          <div key={dep.id} className="flex items-center justify-between text-sm rounded border p-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="truncate" title={target?.name}>{target?.name}</span>
-                              <Badge variant="outline" className="text-2xs">{dep.type}</Badge>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                              onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
-                              aria-label="Delete dependency"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      {outgoing.length === 0 && (
-                        <p className="text-xs text-muted-foreground">None</p>
+
+                  {/* Outgoing */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Outgoing</h4>
+                    <div className="rounded-md border bg-card p-2">
+                      {outgoing.length === 0 ? (
+                        <div className="text-xs text-muted-foreground flex items-center justify-between">
+                          <span>None</span>
+                          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {outgoing.map((dep) => {
+                            const to = components.find(c => c.id === dep.targetId);
+                            return (
+                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 py-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">{to?.name || dep.targetId}</span>
+                                  {/* removed visible type badge */}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
+                                  aria-label="Delete dependency"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>
