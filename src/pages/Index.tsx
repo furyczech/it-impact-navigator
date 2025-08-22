@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+  import { useEffect, useState } from "react";
 import { useItiacStore } from "@/store/useItiacStore";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
@@ -53,13 +53,11 @@ const Index = () => {
         return <WorkflowsManagement />;
       case "analysis":
         return (
-          <div>
-            <ImpactAnalysisEngine 
-              components={components}
-              dependencies={dependencies}
-              workflows={workflows}
-            />
-          </div>
+          <ImpactAnalysisEngine 
+            components={components}
+            dependencies={dependencies}
+            workflows={workflows}
+          />
         );
       case "data":
         return <DataManagement />;
@@ -73,7 +71,7 @@ const Index = () => {
   return (
     <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
       <div className="h-full min-h-0 flex flex-col gap-4 px-4 md:px-6 py-4 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {renderContent()}
         </div>
       </div>

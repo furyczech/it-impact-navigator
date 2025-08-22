@@ -1,15 +1,8 @@
 import { useState, useMemo } from "react";
 import { ITComponent, ComponentDependency, BusinessWorkflow } from "@/types/itiac";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { 
   Table, 
   TableBody, 
@@ -18,7 +11,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { AlertTriangle, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -50,15 +43,9 @@ interface ImpactResult {
 }
 
 export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: ImpactAnalysisEngineProps) => {
-  const [selectedComponent, setSelectedComponent] = useState<string>("all");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsFor, setDetailsFor] = useState<ImpactResult | null>(null);
   
-  // Only analyze components that are NOT online
-  const nonOnlineComponents = useMemo(() => (
-    components.filter(c => c.status !== 'online')
-  ), [components]);
-  const nonOnlineIds = useMemo(() => new Set(nonOnlineComponents.map(c => c.id)), [nonOnlineComponents]);
   // KPIs removed per request; no derived KPI metrics are computed here
 
   const analyzeImpact = (componentId: string): ImpactResult => {
@@ -149,37 +136,29 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
       }
     }
 
-    // Calculate business impact score (heavier weights for more deps, workflows, and deeper chains)
+    // Option B: Simplified Business Impact Score (normalized 0–100)
     const directCount = directImpacts.length;
     const indirectCount = indirectImpacts.length;
-    const totalImpacted = impactedComponentIds.length;
-    const indirectDepths = indirectImpacts
-      .map(name => {
-        const id = impactedComponentIds.find(id => (components.find(c => c.id === id)?.name || 'Unknown') === name);
-        return id ? (depth.get(id) || 0) : 0;
-      })
-      .filter(d => d >= 2);
-    const avgIndirectDepth = indirectDepths.length ? (indirectDepths.reduce((a, b) => a + b, 0) / indirectDepths.length) : 0;
-    const maxDepth = Math.max(0, ...Array.from(depth.values()));
+    const errorWorkflowsCount = affectedWorkflows.size; // only added when severity === 'error'
 
-    const directImpactScore = directCount * 12; // higher weight
-    const indirectImpactScore = indirectCount * 8; // higher than before
-    const workflowImpactScore = affectedWorkflows.size * 20; // only error workflows counted
-    const stepImpactScore = affectedSteps.filter(s => s.severity === 'error').length * 5; // count only error steps
-    const chainSeverityScore = (avgIndirectDepth * 5) + (maxDepth * 3); // deeper chains are worse
-    const breadthSeverityScore = totalImpacted * 2; // broader blast radius is worse
+    const cappedDirect = Math.min(directCount, 10);      // max 10
+    const cappedIndirect = Math.min(indirectCount, 20);  // max 20
+    const cappedErrWf = Math.min(errorWorkflowsCount, 5);// max 5
 
-    const criticalityMultiplier = component.criticality === 'critical' ? 2 : 
-                                 component.criticality === 'high' ? 1.5 : 1;
+    const summed = (cappedDirect * 8) + (cappedIndirect * 2) + (cappedErrWf * 10);
 
-    const rawScore = directImpactScore + indirectImpactScore + workflowImpactScore + stepImpactScore + chainSeverityScore + breadthSeverityScore;
-    const businessImpactScore = Math.round(rawScore * criticalityMultiplier);
+    const criticalityMultiplier = component.criticality === 'critical' ? 2
+                                 : component.criticality === 'high' ? 1.5
+                                 : 1;
 
-    // Determine risk level
+    const scaled = summed * criticalityMultiplier;
+    const businessImpactScore = Math.max(0, Math.min(100, Math.round(scaled)));
+
+    // Risk thresholds for 0–100 scale
     let riskLevel: 'low' | 'medium' | 'high' | 'critical';
-    if (businessImpactScore >= 150) riskLevel = 'critical';
-    else if (businessImpactScore >= 90) riskLevel = 'high';
-    else if (businessImpactScore >= 45) riskLevel = 'medium';
+    if (businessImpactScore >= 80) riskLevel = 'critical';
+    else if (businessImpactScore >= 60) riskLevel = 'high';
+    else if (businessImpactScore >= 40) riskLevel = 'medium';
     else riskLevel = 'low';
 
     return {
@@ -196,25 +175,43 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
     };
   };
 
-  // Auto-computed results (no need to press Run)
   const analysisResults = useMemo<ImpactResult[]>(() => {
-    if (selectedComponent === 'all-components') {
-      const results = components.map(component => analyzeImpact(component.id));
-      return results.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
-    }
-    if (selectedComponent && selectedComponent !== "all") {
-      const comp = components.find(c => c.id === selectedComponent);
-      if (comp && comp.status !== 'online') {
-        return [analyzeImpact(selectedComponent)];
-      }
-      return [];
-    } else {
-      const results = nonOnlineComponents.map(component => analyzeImpact(component.id));
-      return results.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
-    }
-  }, [selectedComponent, components, dependencies, workflows, nonOnlineComponents]);
+    // initial independent computation
+    const results = components.map(component => analyzeImpact(component.id));
 
-  // Removed manual run; results update automatically via useMemo
+    // enforce monotonicity: parent (source) should not be much lower than child (target)
+    const idToResult = new Map<string, ImpactResult>(results.map(r => [r.componentId, { ...r }]));
+    const decay = 0; // enforce parent >= child (no allowed negative gap)
+
+    // helper to recompute risk from score
+    const riskFromScore = (score: number): ImpactResult['riskLevel'] => {
+      if (score >= 80) return 'critical';
+      if (score >= 60) return 'high';
+      if (score >= 40) return 'medium';
+      return 'low';
+    };
+
+    // propagate upward along chains (more iterations for longer paths)
+    const maxIters = Math.max(3, components.length);
+    for (let iter = 0; iter < maxIters; iter++) {
+      let changed = false;
+      for (const dep of dependencies) {
+        const parent = idToResult.get(dep.sourceId);
+        const child = idToResult.get(dep.targetId);
+        if (!parent || !child) continue;
+        const minParent = Math.max(0, child.businessImpactScore - decay);
+        if (parent.businessImpactScore < minParent) {
+          parent.businessImpactScore = Math.min(100, minParent);
+          parent.riskLevel = riskFromScore(parent.businessImpactScore);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    const adjusted = Array.from(idToResult.values());
+    return adjusted.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
+  }, [components, dependencies, workflows]);
 
   const riskColorMap = {
     low: "success",
@@ -223,127 +220,115 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
     critical: "critical"
   } as const;
 
-
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 flex flex-col gap-4 overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Impact Analysis Engine</h1>
-          <p className="text-muted-foreground mt-1">Analyze IT asset failure impacts on business processes</p>
+          <h1 className="page-title">IT Asset Impact Overview</h1>
+          <p className="page-subtitle">Overview of failure impacts across all IT assets and processes</p>
         </div>
         <div className="flex items-center gap-2" />
       </div>
 
-      {/* Controls */}
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex-1 min-w-64">
-              <Select value={selectedComponent} onValueChange={setSelectedComponent}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select IT asset or All (Non-Online / All IT Assets)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Non-Online</SelectItem>
-                  <SelectItem value="all-components">All IT Assets</SelectItem>
-                  {nonOnlineComponents.map(component => (
-                    <SelectItem key={component.id} value={component.id}>
-                      {component.name} ({component.type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* KPI cards removed per request */}
-
       {/* Analysis Results */}
       {analysisResults.length > 0 && (
-        <Card className="bg-card border-border shadow-depth">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="w-5 h-5 text-primary" />
-              <span>Impact Analysis Results</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
+        <Card className="enhanced-card shadow-depth mb-0 overflow-hidden flex-1 flex flex-col min-h-0">
+          <CardContent className="impact-scroll enhanced-card-content p-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 pb-2" style={{ scrollbarGutter: 'stable' }}>
+            <Table className="enhanced-table w-full table-edge-tight table-collapse compact-tables text-xs table-fixed bg-transparent">
+              <TableHeader className="sticky top-0 z-20 bg-card border-b border-border shadow-sm">
                 <TableRow>
-                  <TableHead>IT Asset</TableHead>
-                  <TableHead>
-                    <div className="flex items-center gap-1">
-                      Business Impact Score
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="max-w-xs text-sm">
-                              Souhrnný skóre dopadu: 10× přímé zásahy + 5× nepřímé zásahy + 15× zasažené procesy, násobeno kritičností IT assetu.
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </TableHead>
-                  <TableHead>Risk Level</TableHead>
-                  <TableHead>Impacted IT Assets</TableHead>
-                  <TableHead>Affected Processes</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {analysisResults.map((result) => (
-                  <TableRow key={result.componentId}>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{result.componentName}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-2xl text-foreground">{result.businessImpactScore}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={riskColorMap[result.riskLevel]} className="capitalize text-base px-3.5 py-1.5">
-                        {result.riskLevel}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-[600px]">
-                        {result.impactedComponents.map((impact, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {impact}
-                          </Badge>
-                        ))}
-                        {result.impactedComponents.length === 0 && (
-                          <span className="text-xs text-muted-foreground">None</span>
-                        )}
+                    <TableHead>IT Asset</TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-1">
+                        Business Impact Score
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-sm text-sm space-y-2">
+                                <div className="font-semibold">Business Impact Score (0–100)</div>
+                                <ul className="list-disc pl-4 space-y-1">
+                                  <li><span className="font-medium">Direct impacts</span>: assets directly dependent (1 hop). Capped at 10.</li>
+                                  <li><span className="font-medium">Indirect impacts</span>: assets affected via 2+ hops. Capped at 20.</li>
+                                  <li><span className="font-medium">Error workflows</span>: workflows without a working alternative. Capped at 5.</li>
+                                </ul>
+                                <div className="font-mono text-xs leading-5 bg-muted/40 rounded p-2">
+                                  Score = 8×min(Direct,10) + 2×min(Indirect,20) + 10×min(ErrorWorkflows,5)
+                                </div>
+                                <div>
+                                  Then multiplied by asset criticality: <span className="font-mono">Critical×2</span>, <span className="font-mono">High×1.5</span>, else <span className="font-mono">×1</span>. Final score is clamped to <span className="font-mono">0–100</span>.
+                                </div>
+                                <div className="text-xs text-muted-foreground">Risk levels: Low &lt; 40, Medium ≥ 40, High ≥ 60, Critical ≥ 80.</div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {result.affectedWorkflows.slice(0, 2).map((workflow, index) => (
-                          <Badge key={index} variant="secondary" className="mr-1 text-base px-3.5 py-1.5">
-                            {workflow}
-                          </Badge>
-                        ))}
-                        {result.affectedWorkflows.length > 2 && (
-                          <Badge variant="secondary" className="text-base px-3.5 py-1.5">
-                            +{result.affectedWorkflows.length - 2} more
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => { setDetailsFor(result); setDetailsOpen(true); }}>View Details</Button>
-                    </TableCell>
+                    </TableHead>
+                    <TableHead>Risk Level</TableHead>
+                    <TableHead>Impacted IT Assets</TableHead>
+                    <TableHead>Affected Processes</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
+                </TableHeader>
+                <TableBody>
+                  {analysisResults.map((result) => (
+                    <TableRow
+                      key={result.componentId}
+                      onClick={() => { setDetailsFor(result); setDetailsOpen(true); }}
+                      className="cursor-pointer hover:bg-muted/40 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setDetailsFor(result);
+                          setDetailsOpen(true);
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <div className="font-medium text-foreground">{result.componentName}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-base text-foreground">{result.businessImpactScore}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={riskColorMap[result.riskLevel]} className="capitalize text-xs px-2 py-0.5">
+                          {result.riskLevel}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[600px]">
+                          {result.impactedComponents.map((impact, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {impact}
+                            </Badge>
+                          ))}
+                          {result.impactedComponents.length === 0 && (
+                            <span className="text-xs text-muted-foreground">None</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          {result.affectedWorkflows.slice(0, 2).map((workflow, index) => (
+                            <Badge key={index} variant="secondary" className="mr-1 text-xs px-2 py-0.5">
+                              {workflow}
+                            </Badge>
+                          ))}
+                          {result.affectedWorkflows.length > 2 && (
+                            <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                              +{result.affectedWorkflows.length - 2} more
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
             </Table>
           </CardContent>
         </Card>

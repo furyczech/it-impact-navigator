@@ -77,14 +77,14 @@ export const DataManagement = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Import / Export</h1>
-          <p className="text-muted-foreground mt-1">Manage backups, CSV imports, and reports</p>
+          <h1 className="page-title">Import / Export</h1>
+          <p className="page-subtitle">Manage backups, CSV imports, and reports</p>
         </div>
       </div>
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="section-title flex items-center gap-2">
             <FileJson className="w-5 h-5 text-primary" /> JSON Backup
           </CardTitle>
         </CardHeader>
@@ -100,7 +100,7 @@ export const DataManagement = () => {
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="section-title flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-primary" /> CSV Exports / Imports
           </CardTitle>
         </CardHeader>
@@ -123,7 +123,7 @@ export const DataManagement = () => {
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="section-title flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" /> Impact Analysis Exports
           </CardTitle>
         </CardHeader>

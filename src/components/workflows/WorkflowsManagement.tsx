@@ -84,8 +84,8 @@ export const WorkflowsManagement = () => {
       {/* Header */}
       <div className="flex justify-between items-center flex-none">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Business Processes</h1>
-          <p className="text-muted-foreground mt-1">Define and manage business processes and their workflows</p>
+          <h1 className="page-title">Business Processes</h1>
+          <p className="page-subtitle">Define and manage business processes and their workflows</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={() => setIsFormOpen(true)} size="default">
@@ -149,11 +149,11 @@ export const WorkflowsManagement = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[minmax(0,1fr)] items-stretch gap-6 min-h-0 flex-1 min-w-0 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] items-stretch gap-6 min-h-0 flex-1 min-w-0 overflow-hidden">
         {/* Workflows Table */}
-        <Card className="lg:col-span-2 bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
+        <Card className="lg:col-span-1 bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="section-title flex items-center space-x-2">
               <GitBranch className="w-5 h-5 text-primary" />
               <span>Business Processes ({filteredWorkflows.length})</span>
             </CardTitle>
@@ -236,14 +236,14 @@ export const WorkflowsManagement = () => {
         </Card>
 
         {/* Process Details */}
-        <Card className="bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
+        <Card className="lg:col-span-1 bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="section-title flex items-center space-x-2">
               <Users className="w-5 h-5 text-primary" />
               <span>Process Details</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 min-w-0 overflow-hidden pr-2 overscroll-none flex flex-col">
+          <CardContent className="flex-1 min-h-0 min-w-0 overflow-hidden overscroll-none flex flex-col">
             {selectedWorkflow ? (
               <>
                 <div className="flex-none">

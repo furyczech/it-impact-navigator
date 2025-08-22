@@ -283,7 +283,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       <Card ref={ref} className={cn("bg-card border-border shadow-depth flex flex-col h-full", className)} {...props}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="section-title flex items-center space-x-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
               <span>Active Alerts</span>
             </CardTitle>

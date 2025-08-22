@@ -408,9 +408,9 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
       <Card ref={ref} className={cn("bg-card border-border shadow-depth flex flex-col h-full", className)} {...props}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="section-title flex items-center space-x-2">
               <Network className="w-5 h-5 text-primary" />
-              <span>Network Topology</span>
+              <span>Dependency Map</span>
             </CardTitle>
             <Button
               variant="ghost"

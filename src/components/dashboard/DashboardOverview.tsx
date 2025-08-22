@@ -154,7 +154,7 @@ export const DashboardOverview = ({ onQuickNav }: DashboardOverviewProps) => {
       {/* Incident History */}
       <Card className="bg-card border-border shadow-depth">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="section-title flex items-center space-x-2">
             <AlertTriangle className="w-5 h-5 text-warning" />
             <span>Incident History</span>
           </CardTitle>

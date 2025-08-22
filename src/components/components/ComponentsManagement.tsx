@@ -222,8 +222,8 @@ export const ComponentsManagement = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">IT Assets Management</h1>
-          <p className="text-muted-foreground mt-1">Manage IT assets and their configurations</p>
+          <h1 className="page-title">IT Assets Management</h1>
+          <p className="page-subtitle">Manage IT assets and their configurations</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -388,7 +388,7 @@ export const ComponentsManagement = () => {
       {/* IT Assets Table */}
       <Card className="bg-card border-border shadow-depth mb-0 overflow-hidden flex-1 flex flex-col min-h-0">
         <CardHeader className="pl-4 pr-0">
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="section-title flex items-center space-x-2">
             <Server className="w-5 h-5 text-primary" />
             <span>IT Assets ({filteredComponents.length})</span>
           </CardTitle>

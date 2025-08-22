@@ -265,6 +265,17 @@
 
 /* Compact tables mode: reduce default paddings and row heights */
 @layer utilities {
+  /* Shared page title/subtitle utilities (match Image 1) */
+  .page-title {
+    @apply text-xl font-semibold text-foreground;
+  }
+  .page-subtitle {
+    @apply text-muted-foreground mt-1;
+  }
+  /* Smaller section/card titles */
+  .section-title {
+    @apply text-base font-semibold text-foreground;
+  }
   .compact-tables table th {
     height: 2rem; /* h-8 */
     padding-left: 0.5rem; /* px-2 */
@@ -430,14 +441,24 @@
 
 .enhanced-table tbody tr:hover {
   background: hsl(var(--table-row-hover));
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px -1px hsl(var(--shadow-medium));
+  /* remove motion/shadow to prevent wobble */
+  transform: none;
+  box-shadow: none;
 }
 
 .enhanced-table tbody td {
   padding: 14px 12px;
   color: hsl(var(--foreground));
   font-size: 0.875rem;
+}
+
+/* Impact Analysis: table lives inside a card scroller.
+   Remove inner container chrome so edges match the outer card. */
+.impact-scroll .enhanced-table {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* Enhanced Card Styling */
@@ -450,8 +471,9 @@
 }
 
 .enhanced-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px -2px hsl(var(--shadow-medium)), 0 8px 24px -8px hsl(var(--shadow-elevated));
+  /* keep hover without lifting to avoid layout nudge */
+  transform: none;
+  box-shadow: 0 4px 10px -4px hsl(var(--shadow-medium));
 }
 
 .enhanced-card-header {

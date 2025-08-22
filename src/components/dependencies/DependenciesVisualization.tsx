@@ -128,8 +128,8 @@ export const DependenciesVisualization = () => {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground whitespace-nowrap">Dependencies Visualization</h1>
-          <p className="text-muted-foreground mt-1">Visualize and manage IT asset dependencies</p>
+          <h1 className="page-title whitespace-nowrap">Dependencies Visualization</h1>
+          <p className="page-subtitle">Visualize and manage IT asset dependencies</p>
         </div>
 
         <div className="flex items-center gap-2 w-full">
@@ -221,7 +221,7 @@ export const DependenciesVisualization = () => {
         {/* Assets list on the LEFT (1/3) */}
         <Card className="bg-card border-border shadow-depth h-full overflow-hidden flex flex-col">
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="section-title flex items-center justify-between">
               <span className="flex items-center space-x-2">
                 <GitBranch className="w-5 h-5 text-primary" />
                 <span>IT Assets</span>
@@ -324,22 +324,12 @@ export const DependenciesVisualization = () => {
         {/* Network Map on the RIGHT (2/3) */}
         <Card className="lg:col-span-2 bg-card border-border shadow-depth overflow-hidden flex flex-col h-full">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="section-title flex items-center space-x-2">
               <Network className="w-5 h-5 text-primary" />
-              <span>Dependency Network Map</span>
+              <span>IT Asset Relationships</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
-            {/* Legend (match NetworkTopology) */}
-            <div className="px-4 pt-2">
-              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-2">
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--success))'}} /> Online</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--warning))'}} /> Warning</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} /> Impacted</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--destructive))'}} /> Offline</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
-              </div>
-            </div>
             <div className="relative flex-1 min-h-0">
               {/* Overlay controls at top-right of the map */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
@@ -376,19 +366,9 @@ export const DependenciesVisualization = () => {
           <div className="flex items-center justify-between px-2 py-1">
             <div className="flex items-center space-x-2">
               <Network className="w-5 h-5 text-primary" />
-              <span className="font-medium">Dependency Network Map</span>
+              <span className="font-medium">IT Asset Relationships</span>
             </div>
             {/* Fit/Close moved to map overlay */}
-          </div>
-          {/* Legend (fullscreen) */}
-          <div className="px-2 pt-1">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-1">
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--success))'}} /> Online</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--warning))'}} /> Warning</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} /> Impacted</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--destructive))'}} /> Offline</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
-            </div>
           </div>
           <div className="relative">
             {/* Overlay controls at top-right in fullscreen map */}
