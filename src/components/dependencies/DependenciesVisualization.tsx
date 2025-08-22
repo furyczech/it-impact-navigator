@@ -275,8 +275,8 @@ export const DependenciesVisualization = () => {
                   return (
                     <div
                       key={component.id}
-                      className={`group relative p-3 rounded-md border cursor-pointer transition-colors bg-card/40 hover:bg-card/70 ${
-                        isSelected ? "ring-2 ring-primary border-transparent bg-primary/5" : "border-border"
+                      className={`group relative p-4 rounded-lg border cursor-pointer transition-colors transition-shadow bg-card shadow hover:shadow-xl hover:border-primary hover:ring-2 hover:ring-primary/40 hover:-translate-y-[3px] ${
+                        isSelected ? "ring-2 ring-primary border-primary bg-primary/15" : "border-border"
                       }`}
                       onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                         if (e.ctrlKey) {
@@ -295,13 +295,13 @@ export const DependenciesVisualization = () => {
                     >
                       {/* Left status accent bar */}
                       <span
-                        className={`absolute left-0 top-0 h-full w-1 rounded-l-md ${statusColors[component.status].replace('text-', 'bg-')}`}
+                        className={`absolute left-0 top-0 h-full w-2 rounded-l-md ${statusColors[component.status].replace('text-', 'bg-')} shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]`}
                         aria-hidden
                       />
-                      <div className="flex items-start justify-between gap-3 pl-1">
+                      <div className="flex items-start justify-between gap-3 pl-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="truncate font-medium text-foreground" title={component.name}>{component.name}</span>
+                            <span className="truncate font-semibold text-foreground text-[1rem]" title={component.name}>{component.name}</span>
                           </div>
                           <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                             <Badge variant="outline" className="text-2xs capitalize">{component.type}</Badge>
@@ -363,6 +363,7 @@ export const DependenciesVisualization = () => {
                   setPendingCrit('medium');
                   setDepConfigOpen(true);
                 }}
+                onDeleteDependency={(dependencyId: string) => { setDepToDelete(dependencyId); setDepDeleteOpen(true); }}
               />
             </div>
           </CardContent>
@@ -413,6 +414,7 @@ export const DependenciesVisualization = () => {
                 setPendingCrit('medium');
                 setDepConfigOpen(true);
               }}
+              onDeleteDependency={(dependencyId: string) => { setDepToDelete(dependencyId); setDepDeleteOpen(true); }}
             />
           </div>
         </DialogContent>
