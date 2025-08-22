@@ -113,10 +113,24 @@ export const DependenciesVisualization = () => {
   const mapComponents = useMemo(() => {
     if (showAll) return sortedComponents;
     if (selectedIds.size === 0) return [] as typeof components;
-    const visible = new Set<string>([...selectedIds]);
+    // Build undirected adjacency for multi-hop traversal
+    const adj = new Map<string, Set<string>>();
+    const ensure = (id: string) => { if (!adj.has(id)) adj.set(id, new Set()); return adj.get(id)!; };
+    components.forEach(c => ensure(c.id));
     for (const dep of dependencies) {
-      if (visible.has(dep.sourceId)) visible.add(dep.targetId);
-      if (visible.has(dep.targetId)) visible.add(dep.sourceId);
+      ensure(dep.sourceId).add(dep.targetId);
+      ensure(dep.targetId).add(dep.sourceId);
+    }
+    // BFS/DFS from all selected to collect the entire connected component(s)
+    const visible = new Set<string>();
+    const queue: string[] = [...selectedIds];
+    queue.forEach(id => visible.add(id));
+    while (queue.length) {
+      const cur = queue.shift()!;
+      const nbs = adj.get(cur) || new Set<string>();
+      for (const nb of nbs) {
+        if (!visible.has(nb)) { visible.add(nb); queue.push(nb); }
+      }
     }
     return components.filter(c => visible.has(c.id));
   }, [showAll, sortedComponents, selectedIds, dependencies, components]);
