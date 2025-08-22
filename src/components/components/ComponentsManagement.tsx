@@ -30,8 +30,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Server, Database, Globe, Zap, Network, Code, Settings, HardDrive, Plug, Cpu, Shield, Cloud, BadgeCheck, User, Archive, Puzzle } from "lucide-react";
-
+import { 
+  Plus, 
+  Search, 
+  Server, 
+  Database, 
+  Globe, 
+  Zap, 
+  Network, 
+  Code, 
+  Settings, 
+  HardDrive, 
+  Plug, 
+  Cpu, 
+  Shield, 
+  Cloud, 
+  BadgeCheck, 
+  User, 
+  Archive, 
+  Puzzle, 
+  AlertTriangle 
+} from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 const componentIcons = {
   server: Server,
@@ -479,16 +499,32 @@ export const ComponentsManagement = () => {
                     </TableCell>
                     <TableCell className="text-xs w-[7%] px-2 truncate">
                       <div className="flex items-center gap-2">
-                        <Badge variant={statusColors[component.status]} className="capitalize text-xs px-2 py-0.5">
-                          {component.status}
-                        </Badge>
-                        {impacted && (
-                          <Badge 
-                            variant="warning" 
-                            className="text-[10px] px-1.5 py-0.5" 
-                            title={causeName ? `Impacted by ${causeName}` : 'Impacted by downstream outage'}
-                          >
-                            Impacted
+                        {impacted ? (
+                          <>
+                            <Badge 
+                              variant="warning" 
+                              className="text-[10px] px-1.5 py-0.5"
+                            >
+                              Impacted
+                            </Badge>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle 
+                                    className="w-3.5 h-3.5 cursor-help"
+                                    style={{ color: 'hsl(var(--warning))' }}
+                                    aria-label="Impacted details"
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  {causeName ? `Impacted by ${causeName}` : 'Impacted by downstream outage'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </>
+                        ) : (
+                          <Badge variant={statusColors[component.status]} className="capitalize text-xs px-2 py-0.5">
+                            {component.status}
                           </Badge>
                         )}
                         {impactedOnly && component.status === 'offline' && (

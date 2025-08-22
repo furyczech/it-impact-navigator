@@ -85,9 +85,20 @@
     
     --radius: 0.5rem;
   }
-  html {
-    /* Shrink global rem scale for the whole app */
-    font-size: 13px;
+  * {
+    @apply border-border;
+  }
+
+  /* Lock page scroll to prevent body/html from scrolling */
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;           /* no page scrollbar */
+    overscroll-behavior: none;  /* block scroll chaining */
+  }
+
+  body {
+    /* Smaller default text size globally */
+    @apply bg-background text-foreground text-sm;
   }
 }
 

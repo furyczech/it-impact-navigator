@@ -80,9 +80,9 @@ export const WorkflowsManagement = () => {
   };
 
   return (
-    <div className="space-y-4 overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden gap-4 overscroll-none">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-none">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Business Processes</h1>
           <p className="text-muted-foreground mt-1">Define and manage business processes and their workflows</p>
@@ -119,7 +119,7 @@ export const WorkflowsManagement = () => {
       {/* Stats removed as per request */}
 
       {/* Filters */}
-      <Card className="bg-card border-border">
+      <Card className="bg-card border-border flex-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-64">
@@ -149,17 +149,17 @@ export const WorkflowsManagement = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[minmax(0,1fr)] items-stretch gap-6 min-h-0 flex-1 min-w-0 overflow-hidden">
         {/* Workflows Table */}
-        <Card className="lg:col-span-2 bg-card border-border shadow-depth">
+        <Card className="lg:col-span-2 bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <GitBranch className="w-5 h-5 text-primary" />
               <span>Business Processes ({filteredWorkflows.length})</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="h-[68vh] md:h-[76vh] overflow-auto">
+          <CardContent className="p-0 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-auto overscroll-none">
+            <div className="h-full max-h-full overflow-y-auto overscroll-none">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -236,30 +236,30 @@ export const WorkflowsManagement = () => {
         </Card>
 
         {/* Process Details */}
-        <Card className="bg-card border-border shadow-depth">
+        <Card className="bg-card border-border shadow-depth flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="w-5 h-5 text-primary" />
               <span>Process Details</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[68vh] md:h-[76vh] overflow-auto pr-2">
+          <CardContent className="flex-1 min-h-0 min-w-0 overflow-hidden pr-2 overscroll-none flex flex-col">
             {selectedWorkflow ? (
-              <div className="space-y-4">
-                <div>
+              <>
+                <div className="flex-none">
                   <h3 className="font-semibold text-foreground">{selectedWorkflow.name}</h3>
                   <p className="text-sm text-muted-foreground mt-1">{selectedWorkflow.description}</p>
                 </div>
-                
-                <div className="flex items-center space-x-4">
+
+                <div className="flex items-center space-x-4 flex-none mt-2">
                   <Badge variant={criticalityColors[selectedWorkflow.criticality]} className="text-base px-3.5 py-1.5 capitalize">
                     {selectedWorkflow.criticality}
                   </Badge>
                 </div>
 
-                <div>
+                <div className="flex-1 min-h-0 mt-4">
                   <h4 className="font-medium text-foreground mb-3">Process Steps</h4>
-                  <div className="space-y-2">
+                  <div className="h-full max-h-full overflow-y-auto overscroll-none space-y-2 pr-1 pb-2">
                     {selectedWorkflow.steps
                       .sort((a, b) => a.order - b.order)
                       .map((step) => {
@@ -277,11 +277,9 @@ export const WorkflowsManagement = () => {
                               setIsFormOpen(true);
                             }}
                           >
-                            {/* Numbered circle */}
                             <div className="flex-none w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium grid place-items-center">
                               {step.order}
                             </div>
-                            {/* Content */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -294,7 +292,6 @@ export const WorkflowsManagement = () => {
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition" />
                               </div>
-                              {/* Primary assets */}
                               <div className="mt-2 text-[11px] text-muted-foreground">
                                 <span className="font-medium">Primary IT Assets:</span>
                                 <span className="sr-only"> </span>
@@ -306,7 +303,6 @@ export const WorkflowsManagement = () => {
                                   ))}
                                 </div>
                               </div>
-                              {/* Alternative assets */}
                               {step.alternativeComponentIds && step.alternativeComponentIds.length > 0 && (
                                 <div className="mt-2 text-[11px] text-muted-foreground">
                                   <span className="font-medium">Alternative IT Assets:</span>
@@ -326,13 +322,13 @@ export const WorkflowsManagement = () => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-border">
+                <div className="pt-4 flex-none mt-4">
                   <div className="text-sm text-muted-foreground">
                     <div>Owner: {selectedWorkflow.owner}</div>
                     <div>Last Updated: {new Date(selectedWorkflow.lastUpdated as any).toLocaleDateString()}</div>
                   </div>
                 </div>
-              </div>
+              </>
             ) : (
               <div className="text-center py-8">
                 <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />

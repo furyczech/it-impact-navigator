@@ -119,7 +119,7 @@ export const DependenciesVisualization = () => {
   const clearSelection = () => setSelectedIds(new Set());
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 flex flex-col gap-6 pb-0">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -212,9 +212,9 @@ export const DependenciesVisualization = () => {
 
       {/* Stats removed per request */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 items-stretch">
         {/* Assets list on the LEFT (1/3) */}
-        <Card className="bg-card border-border shadow-depth">
+        <Card className="bg-card border-border shadow-depth h-full overflow-hidden flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center space-x-2">
@@ -226,8 +226,8 @@ export const DependenciesVisualization = () => {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="h-[72vh] md:h-[80vh] p-4 flex flex-col">
+          <CardContent className="p-0 flex-1 min-h-0">
+            <div className="p-4 flex flex-col h-full min-h-0">
               <div className="pb-2">
                 <Input
                   value={assetSearch}
@@ -260,7 +260,7 @@ export const DependenciesVisualization = () => {
                   </div>
                 </div>
               </div>
-              <div className="mt-2 space-y-2 overflow-y-auto pr-1">
+              <div className="mt-2 space-y-2 overflow-y-auto pr-1 flex-1 min-h-0">
                 {sortedComponents.length === 0 && (
                   <div className="text-xs text-muted-foreground py-8 text-center border rounded-md">No assets match your search/filter.</div>
                 )}
@@ -317,14 +317,14 @@ export const DependenciesVisualization = () => {
         </Card>
 
         {/* Network Map on the RIGHT (2/3) */}
-        <Card className="lg:col-span-2 bg-card border-border shadow-depth">
+        <Card className="lg:col-span-2 bg-card border-border shadow-depth overflow-hidden flex flex-col h-full">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Network className="w-5 h-5 text-primary" />
               <span>Dependency Network Map</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
             {/* Legend (match NetworkTopology) */}
             <div className="px-4 pt-2">
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-2">
@@ -335,16 +335,16 @@ export const DependenciesVisualization = () => {
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--secondary))'}} /> Maintenance</div>
               </div>
             </div>
-            <div className="relative">
+            <div className="relative flex-1 min-h-0">
               {/* Overlay controls at top-right of the map */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => { setShowAll(v => !v); setFitViewTrigger(x=>x+1); }}>
                   {showAll ? 'Hide all' : 'View all'}
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)} aria-label="Fit to view">
+                <Button variant="secondary" size="sm" onClick={() => setFitViewTrigger(x=>x+1)}>
                   <Focus className="w-4 h-4 mr-1" /> Fit to view
                 </Button>
-                <Button size="sm" onClick={() => setFullscreenOpen(true)} aria-label="Fullscreen">
+                <Button size="sm" onClick={() => setFullscreenOpen(true)}>
                   <Maximize2 className="w-4 h-4 mr-1" /> Fullscreen
                 </Button>
               </div>
@@ -482,41 +482,31 @@ export const DependenciesVisualization = () => {
                   </div>
                 </div>
 
-                {/* Quick actions */}
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, criticality: "" }); setIsDepDialogOpen(true); }}>
-                    <Plus className="w-4 h-4 mr-1" /> Incoming
-                  </Button>
-                  <Button size="sm" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", criticality: "" }); setIsDepDialogOpen(true); }}>
-                    <Plus className="w-4 h-4 mr-1" /> Outgoing
-                  </Button>
-                </div>
+                {/* Quick actions removed: adding is available via inline 'Add' per column */}
 
                 {/* Content */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Incoming */}
+                  {/* In */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Incoming</h4>
+                    <h4 className="text-sm font-medium">In</h4>
                     <div className="rounded-md border bg-card p-2">
-                      {incoming.length === 0 ? (
-                        <div className="text-xs text-muted-foreground flex items-center justify-between">
-                          <span>None</span>
-                          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {incoming.map((dep) => {
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {incoming.length === 0 ? (
+                          <div className="flex items-center justify-between rounded-md border bg-background px-2 h-9">
+                            <span className="text-xs text-muted-foreground">None</span>
+                          </div>
+                        ) : (
+                          incoming.map((dep) => {
                             const from = components.find(c => c.id === dep.sourceId);
                             return (
-                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 py-1.5">
+                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 h-9">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm">{from?.name || dep.sourceId}</span>
-                                  {/* removed visible type badge */}
                                 </div>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  className="h-7 w-7 text-destructive outline-none ring-0 ring-offset-0 focus:outline-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!ring-transparent focus-visible:!ring-offset-transparent"
                                   onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
                                   aria-label="Delete dependency"
                                 >
@@ -524,35 +514,36 @@ export const DependenciesVisualization = () => {
                                 </Button>
                               </div>
                             );
-                          })}
-                        </div>
-                      )}
+                          })
+                        )}
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 outline-none ring-0 ring-offset-0 focus:outline-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!ring-transparent focus-visible:!ring-offset-transparent" onClick={() => { setNewDependency({ sourceId: "", targetId: comp.id, criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Outgoing */}
+                  {/* Out */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Outgoing</h4>
+                    <h4 className="text-sm font-medium">Out</h4>
                     <div className="rounded-md border bg-card p-2">
-                      {outgoing.length === 0 ? (
-                        <div className="text-xs text-muted-foreground flex items-center justify-between">
-                          <span>None</span>
-                          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {outgoing.map((dep) => {
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {outgoing.length === 0 ? (
+                          <div className="flex items-center justify-between rounded-md border bg-background px-2 h-9">
+                            <span className="text-xs text-muted-foreground">None</span>
+                          </div>
+                        ) : (
+                          outgoing.map((dep) => {
                             const to = components.find(c => c.id === dep.targetId);
                             return (
-                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 py-1.5">
+                              <div key={dep.id} className="flex items-center justify-between rounded-md border bg-background px-2 h-9">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm">{to?.name || dep.targetId}</span>
-                                  {/* removed visible type badge */}
                                 </div>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  className="h-7 w-7 text-destructive outline-none ring-0 ring-offset-0 focus:outline-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!ring-transparent focus-visible:!ring-offset-transparent"
                                   onClick={() => { setDepToDelete(dep.id); setDepDeleteOpen(true); }}
                                   aria-label="Delete dependency"
                                 >
@@ -560,9 +551,12 @@ export const DependenciesVisualization = () => {
                                 </Button>
                               </div>
                             );
-                          })}
-                        </div>
-                      )}
+                          })
+                        )}
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 outline-none ring-0 ring-offset-0 focus:outline-none focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!ring-transparent focus-visible:!ring-offset-transparent" onClick={() => { setNewDependency({ sourceId: comp.id, targetId: "", criticality: "" }); setIsDepDialogOpen(true); }}>Add</Button>
+                      </div>
                     </div>
                   </div>
                 </div>
