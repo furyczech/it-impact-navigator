@@ -108,13 +108,18 @@ export const DependenciesVisualization = () => {
 
   // Components shown in map
   // - Default: none
-  // - When some are selected in the left list: show selected
+  // - When some are selected in the left list: show selected + all directly related assets
   // - When "View all" is enabled: show all (respecting current filters)
-  const mapComponents = showAll
-    ? sortedComponents
-    : (selectedIds.size > 0
-        ? components.filter(c => selectedIds.has(c.id))
-        : []);
+  const mapComponents = useMemo(() => {
+    if (showAll) return sortedComponents;
+    if (selectedIds.size === 0) return [] as typeof components;
+    const visible = new Set<string>([...selectedIds]);
+    for (const dep of dependencies) {
+      if (visible.has(dep.sourceId)) visible.add(dep.targetId);
+      if (visible.has(dep.targetId)) visible.add(dep.sourceId);
+    }
+    return components.filter(c => visible.has(c.id));
+  }, [showAll, sortedComponents, selectedIds, dependencies, components]);
 
   const clearSelection = () => setSelectedIds(new Set());
 
@@ -303,7 +308,7 @@ export const DependenciesVisualization = () => {
                             <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${critChipClasses[component.criticality as 'low'|'medium'|'high'|'critical']}`}>
                               {component.criticality}
                             </span>
-                            <span>{deps.incoming.length} in • {deps.outgoing.length} out</span>
+                            <span>{deps.incoming.length} depends on • {deps.outgoing.length} supports</span>
                           </div>
                         </div>
                         {/* manage button removed per request */}
@@ -473,12 +478,12 @@ export const DependenciesVisualization = () => {
                 <div className="flex items-start justify-between">
                   <div>
                     <DialogHeader className="p-0">
-                      <DialogTitle>Dependencies for {comp.name}</DialogTitle>
+                      <DialogTitle className="flex items-center gap-2">
+                        <span>Dependencies for {comp.name}</span>
+                        <Badge variant="outline" className="text-xs capitalize">{comp.type}</Badge>
+                      </DialogTitle>
                     </DialogHeader>
                     <p className="text-xs text-muted-foreground mt-1">Review and manage this asset's connections.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">{comp.type}</Badge>
                   </div>
                 </div>
 
@@ -488,7 +493,7 @@ export const DependenciesVisualization = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* In */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">In</h4>
+                    <h4 className="text-sm font-medium">Depends on</h4>
                     <div className="rounded-md border bg-card p-2">
                       <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                         {incoming.length === 0 ? (
@@ -525,7 +530,7 @@ export const DependenciesVisualization = () => {
 
                   {/* Out */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Out</h4>
+                    <h4 className="text-sm font-medium">Supports</h4>
                     <div className="rounded-md border bg-card p-2">
                       <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                         {outgoing.length === 0 ? (
