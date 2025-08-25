@@ -147,7 +147,7 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
 
     if (embedded) {
       return (
-        <div ref={ref} className={cn("flex flex-col h-full", className)} {...props}>
+        <div ref={ref} className={cn("flex flex-col h-full flex-1 min-h-0 overflow-hidden", className)} {...props}>
           {Body}
         </div>
       );

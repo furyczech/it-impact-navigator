@@ -362,7 +362,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
                 <p className="text-xs mt-1">No active alerts</p>
               </div>
             ) : (
-              <div className="mt-2">
+              <div className="mt-2 flex-1 min-h-0 overflow-y-auto">
                 <ProcessImpactPanel
                   components={components!}
                   dependencies={dependencies!}

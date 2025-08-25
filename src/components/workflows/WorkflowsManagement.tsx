@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, GitBranch, Users, Search, ArrowRight, Pencil, Trash2, ChevronRight } from "lucide-react";
+import { Plus, GitBranch, Users, Search, ArrowRight, Pencil, Trash2, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 
 const criticalityColors = {
   low: "success",
@@ -46,17 +46,35 @@ export const WorkflowsManagement = () => {
   const deleteWorkflow = useItiacStore((s) => s.deleteWorkflow);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCriticality, setFilterCriticality] = useState<string>("all");
+  const [filterOwner, setFilterOwner] = useState<string>("all");
+  const ownerOptions = Array.from(new Set(workflows.map(w => (w.owner?.trim() || 'Unassigned')))).sort();
+  const [sortBy, setSortBy] = useState<'name' | 'criticality' | 'risk' | 'steps'>("name");
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>("asc");
   const [selectedWorkflow, setSelectedWorkflow] = useState<BusinessWorkflow | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<BusinessWorkflow | null>(null);
   const [initialEditingStepId, setInitialEditingStepId] = useState<string | undefined>(undefined);
 
+  // helper to toggle sort by header click
+  const setSortKey = (key: 'name' | 'criticality' | 'risk' | 'steps') => {
+    if (sortBy === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortDir('asc');
+    }
+  };
+
   const filteredWorkflows = workflows.filter(workflow => {
-    const matchesSearch = workflow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         workflow.businessProcess.toLowerCase().includes(searchTerm.toLowerCase());
+    const name = (workflow.name || '').toLowerCase();
+    const bp = (workflow.businessProcess || '').toLowerCase();
+    const term = (searchTerm || '').toLowerCase();
+    const matchesSearch = name.includes(term) || bp.includes(term);
     const matchesCriticality = filterCriticality === "all" || workflow.criticality === filterCriticality;
+    const owner = (workflow.owner?.trim() || 'Unassigned');
+    const matchesOwner = filterOwner === 'all' || owner === filterOwner;
     
-    return matchesSearch && matchesCriticality;
+    return matchesSearch && matchesCriticality && matchesOwner;
   });
 
   const getComponentName = (componentId?: string) => {
@@ -66,18 +84,67 @@ export const WorkflowsManagement = () => {
   };
 
   const getWorkflowRisk = (workflow: BusinessWorkflow) => {
-    // Simple risk calculation based on critical primary components (supports multi-primary)
-    const criticalSteps = workflow.steps.filter(step => {
+    // Weighted static risk by criticality of primary IT assets across steps (no status dependency)
+    const weight = { low: 1, medium: 2, high: 3, critical: 4 } as const;
+    const mult = { low: 1.0, medium: 1.1, high: 1.25, critical: 1.5 } as const; // slight uplift by process criticality
+
+    if (!workflow.steps || workflow.steps.length === 0) return "low";
+
+    const stepScores = workflow.steps.map(step => {
       const primaryIds = (step.primaryComponentIds && step.primaryComponentIds.length > 0)
         ? step.primaryComponentIds
         : (step.primaryComponentId ? [step.primaryComponentId] : []);
-      return primaryIds.some(pid => components.find(c => c.id === pid)?.criticality === "critical");
+      const w = primaryIds
+        .map(pid => components.find(c => c.id === pid)?.criticality)
+        .filter((x): x is NonNullable<typeof components[number]["criticality"]> => !!x)
+        .map(c => weight[c]);
+      if (w.length === 0) return 0;
+      const maxW = Math.max(...w);
+      const countHighOrCrit = w.filter(v => v >= 3).length;
+      const bonus = countHighOrCrit > 1 ? 0.5 : 0; // multiple high/critical primaries in the same step increases severity
+      return Math.min(4, maxW + bonus);
     });
 
-    if (criticalSteps.length === workflow.steps.length) return "high";
-    if (criticalSteps.length > 0) return "medium";
+    const avg = stepScores.reduce((a, b) => a + b, 0) / stepScores.length; // 0..4
+    const adjusted = Math.min(4, avg * mult[workflow.criticality]);
+
+    if (adjusted >= 3.5) return "critical";
+    if (adjusted >= 2.7) return "high";
+    if (adjusted >= 1.8) return "medium";
     return "low";
   };
+
+  const critOrder = { low: 0, medium: 1, high: 2, critical: 3 } as const;
+  const riskOrder = { low: 0, medium: 1, high: 2, critical: 3 } as const;
+
+  const riskCache = new Map<string, ReturnType<typeof getWorkflowRisk>>(
+    filteredWorkflows.map(w => [w.id, getWorkflowRisk(w)])
+  );
+
+  const sortedWorkflows = [...filteredWorkflows].sort((a, b) => {
+    let av: number | string = 0;
+    let bv: number | string = 0;
+    if (sortBy === 'name') {
+      av = a.name.toLowerCase();
+      bv = b.name.toLowerCase();
+    } else if (sortBy === 'criticality') {
+      av = critOrder[a.criticality];
+      bv = critOrder[b.criticality];
+    } else if (sortBy === 'risk') {
+      av = riskOrder[riskCache.get(a.id) || 'low'];
+      bv = riskOrder[riskCache.get(b.id) || 'low'];
+    } else if (sortBy === 'steps') {
+      av = a.steps.length;
+      bv = b.steps.length;
+    }
+    let cmp: number;
+    if (typeof av === 'string' && typeof bv === 'string') {
+      cmp = av.localeCompare(bv);
+    } else {
+      cmp = (av as number) - (bv as number);
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden gap-4 overscroll-none">
@@ -145,6 +212,18 @@ export const WorkflowsManagement = () => {
                 <SelectItem value="critical">Critical</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filterOwner} onValueChange={setFilterOwner}>
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Filter by owner" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Owners</SelectItem>
+                {ownerOptions.map((o) => (
+                  <SelectItem key={o} value={o}>{o}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Sort dropdowns removed per request; sorting remains via clickable table headers */}
           </div>
         </CardContent>
       </Card>
@@ -160,19 +239,83 @@ export const WorkflowsManagement = () => {
           </CardHeader>
           <CardContent className="p-0 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-auto overscroll-none">
             <div className="h-full max-h-full overflow-y-auto overscroll-none">
-              <Table>
-                <TableHeader>
+              <Table key={`${sortBy}-${sortDir}`}>
+                <TableHeader className="sticky top-0 z-20 bg-card border-b border-border shadow-sm">
                   <TableRow>
-                    <TableHead>Process</TableHead>
-                    <TableHead>Criticality</TableHead>
-                    <TableHead>Risk Level</TableHead>
-                    <TableHead>Steps</TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 select-none"
+                        onClick={() => setSortKey('name')}
+                        title="Sort by Process"
+                      >
+                        Process
+                        {sortBy === 'name' && (
+                          sortDir === 'asc' ? (
+                            <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                          )
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 select-none"
+                        onClick={() => setSortKey('criticality')}
+                        title="Sort by Criticality"
+                      >
+                        Criticality
+                        {sortBy === 'criticality' && (
+                          sortDir === 'asc' ? (
+                            <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                          )
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 select-none"
+                        onClick={() => setSortKey('risk')}
+                        title="Sort by Risk Level"
+                      >
+                        Risk Level
+                        {sortBy === 'risk' && (
+                          sortDir === 'asc' ? (
+                            <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                          )
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 select-none"
+                        onClick={() => setSortKey('steps')}
+                        title="Sort by Steps"
+                      >
+                        Steps
+                        {sortBy === 'steps' && (
+                          sortDir === 'asc' ? (
+                            <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                          )
+                        )}
+                      </button>
+                    </TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredWorkflows.map((workflow) => {
-                    const riskLevel = getWorkflowRisk(workflow);
+                  {sortedWorkflows.map((workflow) => {
+                    const riskLevel = riskCache.get(workflow.id) || getWorkflowRisk(workflow);
                     return (
                       <TableRow 
                         key={workflow.id}
@@ -192,7 +335,7 @@ export const WorkflowsManagement = () => {
                         </TableCell>
                         <TableCell>
                           <Badge 
-                            variant={riskLevel === "high" ? "destructive" : riskLevel === "medium" ? "secondary" : "default"}
+                            variant={riskLevel === "critical" ? "destructive" : riskLevel === "high" ? "destructive" : riskLevel === "medium" ? "secondary" : "default"}
                             className="capitalize text-xs px-2 py-0.5"
                           >
                             {riskLevel}
