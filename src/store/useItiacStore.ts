@@ -135,14 +135,18 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
         location: componentData.location || '',
         owner: componentData.owner || '',
         vendor: componentData.vendor || '',
-        metadata: componentData.metadata || {}
+        metadata: {
+          ...(componentData.metadata || {}),
+          // persist helpdesk email in metadata only
+          ...(componentData.helpdeskEmail ? { helpdeskEmail: componentData.helpdeskEmail } : {})
+        }
         // Let the service handle the timestamps
       };
       
       
       
       // Call the API to create the component
-      const newComponent = await createComponentApi(dbComponent);
+      const newComponent = await createComponentApi(dbComponent as any);
       
       if (!newComponent) {
         throw new Error('Failed to create component: No data returned from API');
@@ -173,9 +177,18 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
       const beforeComponent = get().components.find(c => c.id === id);
       if (!beforeComponent) throw new Error('Component not found');
       
+      // Merge helpdeskEmail into metadata and avoid sending unknown columns
+      const { helpdeskEmail, metadata: patchMetadata, ...restPatch } = patch as any;
+      const mergedMetadata = {
+        ...(beforeComponent.metadata || {}),
+        ...(patchMetadata || {}),
+        ...(helpdeskEmail !== undefined && helpdeskEmail !== null ? { helpdeskEmail } : {})
+      };
+      
       // Create a database-compatible update object
-      const updateData = {
-        ...patch,
+      const updateData: any = {
+        ...restPatch,
+        metadata: mergedMetadata,
         last_updated: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

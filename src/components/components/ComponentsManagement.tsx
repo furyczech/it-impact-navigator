@@ -246,7 +246,7 @@ export const ComponentsManagement = () => {
             setEditingComponent(null);
           }}
           onSave={(component) => {
-            const { name, type, status, criticality, description, location, owner, vendor, metadata } = component;
+            const { name, type, status, criticality, description, location, owner, vendor, metadata, helpdeskEmail } = component;
             if (editingComponent) {
               // Pass only patchable fields (no id, no lastUpdated)
               updateComponent(component.id, {
@@ -258,7 +258,9 @@ export const ComponentsManagement = () => {
                 location,
                 owner,
                 vendor,
-                metadata
+                // keep metadata merge in store, include helpdeskEmail hint
+                metadata,
+                helpdeskEmail
               });
             } else {
               // Create with only allowed fields
@@ -271,8 +273,10 @@ export const ComponentsManagement = () => {
                 location,
                 owner,
                 vendor,
-                metadata: metadata || {}
-              });
+                // keep metadata merge in store, include helpdeskEmail hint
+                metadata: metadata || {},
+                helpdeskEmail
+              } as any);
             }
           }}
           component={editingComponent || undefined}

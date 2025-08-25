@@ -27,6 +27,7 @@ export interface ITComponent {
   location?: string;
   owner?: string;
   vendor?: string;
+  helpdeskEmail?: string;
   lastUpdated: Date;
   metadata?: Record<string, any>;
 }

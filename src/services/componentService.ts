@@ -47,6 +47,7 @@ export const fetchComponents = async (): Promise<ITComponent[]> => {
     location: dbComp.location || '',
     owner: dbComp.owner || '',
     vendor: dbComp.vendor || '',
+    helpdeskEmail: dbComp.helpdeskEmail || dbComp.metadata?.helpdeskEmail || undefined,
     lastUpdated: parseDate(dbComp.last_updated || dbComp.updated_at || dbComp.created_at),
     metadata: dbComp.metadata || {}
   }));
@@ -84,7 +85,7 @@ export const createComponent = async (component: Omit<ITComponent, 'id' | 'lastU
     last_updated: component.last_updated || now,
     created_at: component.created_at || now,
     updated_at: component.updated_at || now
-  };
+  } as any;
   
   const { data, error } = await supabase
     .from('components')
@@ -108,6 +109,7 @@ export const createComponent = async (component: Omit<ITComponent, 'id' | 'lastU
     location: data.location,
     owner: data.owner,
     vendor: data.vendor,
+    helpdeskEmail: data.helpdeskEmail || data.metadata?.helpdeskEmail || undefined,
     lastUpdated: new Date(data.last_updated),
     metadata: data.metadata || {}
   };
@@ -143,6 +145,7 @@ export const updateComponent = async (
     location: data.location,
     owner: data.owner,
     vendor: data.vendor,
+    helpdeskEmail: data.helpdeskEmail || data.metadata?.helpdeskEmail || undefined,
     lastUpdated: new Date(data.last_updated),
     metadata: data.metadata || {}
   };

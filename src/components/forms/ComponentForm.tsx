@@ -35,7 +35,8 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
     description: component?.description || "",
     location: component?.location || "",
     owner: component?.owner || "",
-    vendor: component?.vendor || ""
+    vendor: component?.vendor || "",
+    helpdeskEmail: (component?.helpdeskEmail || component?.metadata?.helpdeskEmail || "") as string
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -65,6 +66,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
           location: component.location || "",
           owner: component.owner || "",
           vendor: component.vendor || "",
+          helpdeskEmail: (component.helpdeskEmail || component.metadata?.helpdeskEmail || "") as string,
         });
         setErrors({});
       } else if (!isEdit) {
@@ -77,6 +79,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
           location: "",
           owner: "",
           vendor: "",
+          helpdeskEmail: "",
         });
         setErrors({});
       }
@@ -96,8 +99,9 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
       location: formData.location.trim(),
       owner: formData.owner.trim(),
       vendor: formData.vendor.trim() || undefined,
+      helpdeskEmail: formData.helpdeskEmail.trim() || undefined,
       lastUpdated: new Date(),
-      metadata: component?.metadata || {}
+      metadata: { ...(component?.metadata || {}), helpdeskEmail: formData.helpdeskEmail.trim() || undefined }
     };
 
     onSave(newComponent);
@@ -112,7 +116,8 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
         description: "",
         location: "",
         owner: "",
-        vendor: ""
+        vendor: "",
+        helpdeskEmail: ""
       });
     }
   };
@@ -233,6 +238,17 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
               value={formData.vendor}
               onChange={(e) => handleChange("vendor", e.target.value)}
               placeholder="e.g., Acme Corp"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="helpdeskEmail">Helpdesk email</Label>
+            <Input
+              id="helpdeskEmail"
+              type="email"
+              value={formData.helpdeskEmail}
+              onChange={(e) => handleChange("helpdeskEmail", e.target.value)}
+              placeholder="helpdesk@example.com"
             />
           </div>
 
