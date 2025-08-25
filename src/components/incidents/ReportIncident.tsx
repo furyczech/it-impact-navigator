@@ -38,7 +38,7 @@ export const ReportIncident = () => {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden gap-4">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden gap-4">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="page-title">Report Incident</h1>
