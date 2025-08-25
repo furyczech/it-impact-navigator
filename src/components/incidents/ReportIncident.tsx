@@ -46,13 +46,13 @@ export const ReportIncident = () => {
         </div>
       </div>
 
-      <Card className="bg-card border-border shadow-depth flex-1 min-h-0 overflow-hidden">
+      <Card className="bg-card border-border shadow-depth flex-1 min-h-0 flex flex-col">
         <CardHeader>
           <CardTitle className="section-title">Offline Assets ({offline.length})</CardTitle>
         </CardHeader>
-        <CardContent className="p-0 min-h-0 overflow-auto">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           <Table className="enhanced-table w-full text-sm">
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 border-b border-border">
               <TableRow>
                 <TableHead>IT Asset</TableHead>
                 <TableHead>Criticality</TableHead>
