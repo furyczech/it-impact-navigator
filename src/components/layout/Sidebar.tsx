@@ -10,9 +10,8 @@ import {
   Database,
   Shield,
   ChevronLeft,
-  ChevronRight,
-  AlertTriangle
-} from "lucide-react";
+  ChevronRight
+ } from "lucide-react";
 
 const mainNavigationItems = [
   { icon: BarChart3, label: "Dashboard", id: "dashboard" },
@@ -20,7 +19,6 @@ const mainNavigationItems = [
   { icon: Network, label: "Dependencies", id: "dependencies" },
   { icon: GitBranch, label: "Business Processes", id: "workflows" },
   { icon: Shield, label: "Impact Analysis", id: "analysis" },
-  { icon: AlertTriangle, label: "Report Incident", id: "report" },
 ];
 
 interface SidebarProps {

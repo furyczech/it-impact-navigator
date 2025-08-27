@@ -104,7 +104,7 @@ export const ComponentsManagement = () => {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<ITComponent | null>(null);
-  const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'lastUpdated'>('name');
+  const [sortBy, setSortBy] = useState<'name'|'type'|'status'|'criticality'|'location'|'vendor'|'owner'|'supportEmail'|'lastUpdated'>('name');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [headerElevated, setHeaderElevated] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -197,6 +197,10 @@ export const ComponentsManagement = () => {
         case 'location': return (c.location || '').toLowerCase();
         case 'vendor': return (c.vendor || '').toLowerCase();
         case 'owner': return (c.owner || '').toLowerCase();
+        case 'supportEmail': {
+          const email = (c as any).helpdeskEmail || c.metadata?.helpdeskEmail || '';
+          return email.toLowerCase();
+        }
         default: return '';
       }
     };
@@ -217,6 +221,25 @@ export const ComponentsManagement = () => {
 
   const sortIndicator = (key: typeof sortBy) => sortBy === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
+  // Build mailto link for reporting incident about a specific component
+  const buildMailto = (name: string, criticality: string, helpdeskEmail?: string) => {
+    const to = helpdeskEmail || "";
+    const subject = `[Incident] ${name} is OFFLINE (Criticality: ${criticality})`;
+    const body = [
+      `Hello Support Team,`,
+      ``,
+      `The following IT Asset is currently OFFLINE:`,
+      `- Asset: ${name}`,
+      `- Criticality: ${criticality}`,
+      `- Time: ${new Date().toLocaleString()}`,
+      ``,
+      `Please investigate and resolve.`,
+      ``,
+      `Sent from IT Impact Navigator`
+    ].join("%0D%0A");
+    return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${body}`;
+  };
+
   return (
     <div className="h-full min-h-0 flex flex-col gap-4 overflow-hidden">
       {/* Header */}
@@ -229,7 +252,6 @@ export const ComponentsManagement = () => {
           <Button
             variant="default"
             size="sm"
-            title="Add IT Asset"
             aria-label="Add IT Asset"
             onClick={() => setIsDialogOpen(true)}
             className="hover:bg-primary/80 hover:saturate-150 focus-visible:ring-primary/60"
@@ -409,7 +431,7 @@ export const ComponentsManagement = () => {
             <TableHeader>
               <TableRow>
                 <TableHead
-                  className={`cursor-pointer w-[34%] sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[30%] sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('name')}
                 >
                   IT Asset{sortIndicator('name')}
@@ -451,7 +473,13 @@ export const ComponentsManagement = () => {
                   Owner{sortIndicator('owner')}
                 </TableHead>
                 <TableHead
-                  className={`cursor-pointer w-[8%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  className={`cursor-pointer w-[12%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
+                  onClick={() => headerSort('supportEmail')}
+                >
+                  Support email{sortIndicator('supportEmail')}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer w-[7%] px-2 sticky top-0 z-10 bg-card border-b border-border text-xs ${headerElevated ? 'shadow-[0_2px_6px_rgba(0,0,0,0.08)]' : ''}`}
                   onClick={() => headerSort('lastUpdated')}
                 >
                   Last Updated{sortIndicator('lastUpdated')}
@@ -469,11 +497,12 @@ export const ComponentsManagement = () => {
                 const impacted = impactedIds.has(component.id) && component.status === 'online';
                 const causeId = impactCauseMap.get(component.id)?.causeId;
                 const causeName = causeId ? components.find(c => c.id === causeId)?.name : undefined;
+                const helpdeskEmail = (component as any).helpdeskEmail || component.metadata?.helpdeskEmail || "";
                 return (
                   <TableRow key={component.id} id={`row-${component.id}`}>
-                    <TableCell className="w-[34%]">
+                    <TableCell className="w-[30%]">
                       <div className="flex items-center gap-2">
-                        <div className="shrink-0">
+                        <div className="shrink-0 flex items-center gap-2">
                           <label className="switch" title={component.status === 'offline' ? 'Bring Online' : 'Mark as Down (offline)'}>
                             <input
                               type="checkbox"
@@ -486,9 +515,47 @@ export const ComponentsManagement = () => {
                             />
                             <span className="slider"></span>
                           </label>
-                        </div>
-                        <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
-                          <Icon className="w-3.5 h-3.5 text-primary" />
+                          {/* Report incident button next to on/off */}
+                          {component.status === 'offline' && (() => {
+                            return helpdeskEmail ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <a href={buildMailto(component.name, component.criticality, helpdeskEmail)}>
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        className="h-6 px-2 py-0 rounded-full border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 hover:border-warning/60 shadow-sm"
+                                      >
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        Report
+                                      </Button>
+                                    </a>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Sent incident report to helpdesk</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                             ) : (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        disabled
+                                        className="h-6 px-2 py-0 rounded-full border border-warning/30 bg-warning/10 text-warning/70 opacity-60 cursor-not-allowed"
+                                      >
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        Report
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Set helpdesk email on this asset to enable reporting</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                             );
+                           })()}
                         </div>
                         <div className="min-w-0 max-w-full">
                           <div className="font-medium text-foreground truncate text-sm">{component.name}</div>
@@ -497,9 +564,12 @@ export const ComponentsManagement = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs w-[7%] px-2 truncate">
-                      <Badge variant="outline" className="capitalize text-xs px-2 py-0.5">
-                        {component.type.replace('-', ' ')}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {Icon && <Icon className="w-3.5 h-3.5 text-primary shrink-0" aria-hidden="true" />}
+                        <Badge variant="outline" className="capitalize text-xs px-2 py-0.5 truncate">
+                          {component.type.replace('-', ' ')}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs w-[7%] px-2 truncate">
                       <div className="flex items-center gap-2">
@@ -550,7 +620,19 @@ export const ComponentsManagement = () => {
                     <TableCell className="text-muted-foreground w-[7%] px-2 truncate" title={component.owner}>
                       {component.owner}
                     </TableCell>
-                    <TableCell className="text-muted-foreground w-[8%] px-2 truncate">
+                    <TableCell className="text-muted-foreground w-[12%] px-2 truncate" title={helpdeskEmail}>
+                      {helpdeskEmail ? (
+                        <a
+                          href={`mailto:${helpdeskEmail}`}
+                          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        >
+                          {helpdeskEmail}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground w-[7%] px-2 truncate">
                       {new Date(component.lastUpdated as any).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="w-[10%] px-2 pr-3">
@@ -558,7 +640,6 @@ export const ComponentsManagement = () => {
                         <Button
                           variant="default"
                           size="sm"
-                          title="Edit"
                           aria-label={`Edit ${component.name}`}
                           onClick={() => {
                             setEditingComponent(component);
@@ -571,7 +652,6 @@ export const ComponentsManagement = () => {
                         <Button
                           variant="destructive"
                           size="sm"
-                          title="Delete"
                           aria-label={`Delete ${component.name}`}
                           onClick={() => { setDeleteTarget(component); setIsDeleteOpen(true); }}
                           className="w-[88px] hover:bg-destructive/80 hover:saturate-150 focus-visible:ring-destructive/60"

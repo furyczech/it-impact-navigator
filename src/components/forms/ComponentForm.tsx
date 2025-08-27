@@ -242,7 +242,7 @@ export const ComponentForm = ({ component, isOpen, onClose, onSave, isEdit = fal
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="helpdeskEmail">Helpdesk email</Label>
+            <Label htmlFor="helpdeskEmail">Support email</Label>
             <Input
               id="helpdeskEmail"
               type="email"

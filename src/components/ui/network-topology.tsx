@@ -317,6 +317,14 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
     const handleNodeClick = (node: Node) => {
       setSelectedNode(selectedNode === node.id ? null : node.id);
       onNodeClick?.(node.component);
+      // Navigate to IT Assets (Components) showing ALL impacted assets (no root/focus)
+      try {
+        const qs = new URLSearchParams({ impacted: '1' });
+        window.location.hash = `#components?${qs.toString()}`;
+        window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'components' } }));
+      } catch {
+        // no-op
+      }
     };
 
     // Pointer-based panning
@@ -618,8 +626,46 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
               })}
             </svg>
             
-            {/* Selected node details */}
-            {selectedNode && (
+            {/* Hover card for node info (non-interactive) */}
+            {hoveredNode && (() => {
+              const n = nodes.find(nd => nd.id === hoveredNode);
+              if (!n) return null;
+              // Convert world (SVG) coords to screen coords within the container
+              const left = (n.x - pan.x) * zoom;
+              const top = (n.y - pan.y) * zoom;
+              return (
+                <div
+                  className="absolute z-20 pointer-events-none"
+                  style={{ left, top, transform: 'translate(-50%, 10%)' }}
+                >
+                  <div className="bg-popover border border-border rounded-md shadow-md p-1.5 min-w-[180px] max-w-[220px]">
+                    <div className="text-[10px] text-muted-foreground space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="px-1 py-0 h-4 text-[10px] capitalize">
+                          {n.component.type?.replace('-', ' ')}
+                        </Badge>
+                      </div>
+                      {n.component.description && (
+                        <div className="line-clamp-2">{n.component.description}</div>
+                      )}
+                      <div>Criticality: <span className="capitalize">{n.component.criticality}</span></div>
+                      {n.component.vendor && (
+                        <div>Vendor: {n.component.vendor}</div>
+                      )}
+                      {n.component.owner && (
+                        <div>Owner: {n.component.owner}</div>
+                      )}
+                      {n.component.supportEmail && (
+                        <div>Support: {n.component.supportEmail}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+             
+             {/* Selected node details */}
+             {selectedNode && (
               <div className="absolute top-4 right-4 bg-popover border border-border rounded-lg p-3 shadow-lg max-w-xs">
                 {(() => {
                   const node = nodes.find(n => n.id === selectedNode);

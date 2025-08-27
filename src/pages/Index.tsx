@@ -9,7 +9,6 @@ import { WorkflowsManagement } from "@/components/workflows/WorkflowsManagement"
 import { ImpactAnalysisEngine } from "@/components/analysis/ImpactAnalysisEngine";
 import { DataManagement } from "@/components/data/DataManagement";
 import { SettingsPage } from "@/components/settings/SettingsPage";
-import { ReportIncident } from "@/components/incidents/ReportIncident";
 
 
 
@@ -61,7 +60,7 @@ const Index = () => {
           />
         );
       case "report":
-        return <ReportIncident />;
+        return <DashboardOverview />;
       case "data":
         return <DataManagement />;
       case "settings":

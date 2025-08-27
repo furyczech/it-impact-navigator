@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ITComponent, ComponentDependency, BusinessWorkflow, WorkflowStep } from "@/types/itiac";
+import { buildForwardMap } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface ProcessImpactPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   components: ITComponent[];
@@ -28,6 +30,34 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
       return ids.some(id => impactedComponentIds.has(id));
     };
 
+    // Precompute immediate offline cause per impacted component (downstream-only)
+    const impactCauseMap = React.useMemo(() => {
+      const map = new Map<string, { causeId: string; depth: number }>();
+      const forward = buildForwardMap(dependencies);
+      const offlineRoots = components.filter(c => c.status === 'offline').map(c => c.id);
+      const visitedGlobal = new Set<string>();
+      for (const root of offlineRoots) {
+        const visited = new Set<string>([root]);
+        const queue: Array<{ id: string; depth: number }> = [{ id: root, depth: 0 }];
+        while (queue.length) {
+          const { id, depth } = queue.shift()!;
+          const nexts = forward.get(id) || [];
+          for (const nxt of nexts) {
+            if (!visited.has(nxt)) {
+              visited.add(nxt);
+              const prev = map.get(nxt);
+              if (!prev || depth + 1 < prev.depth) {
+                map.set(nxt, { causeId: root, depth: depth + 1 });
+              }
+              if (!visitedGlobal.has(nxt)) queue.push({ id: nxt, depth: depth + 1 });
+            }
+          }
+        }
+        offlineRoots.forEach(r => visitedGlobal.add(r));
+      }
+      return map;
+    }, [components, dependencies]);
+
     const impactedWorkflows = React.useMemo(() => {
       return workflows
         .map(wf => {
@@ -48,6 +78,11 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
           return b.impactedStepIds.size - a.impactedStepIds.size;
         });
     }, [workflows, impactedComponentIds]);
+
+    // Fallback list of offline root names (for guaranteed display)
+    const offlineRootNames = React.useMemo(() => {
+      return components.filter(c => c.status === 'offline').map(c => c.name).filter((n): n is string => !!n);
+    }, [components]);
 
     const Body = (
       <div className={cn("pt-0 flex-1 min-h-0 overflow-y-auto pr-1", embedded && "p-0", !embedded && "p-0") /* keep neutral padding */}>
@@ -72,6 +107,33 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
               }
               const list = showAll ? stepsSorted : stepsSorted.filter((_, i) => visibleIndices.has(i));
 
+              // Determine offline cause name for this workflow: choose first available among impacted steps
+              const impactedCompIdsInWf: string[] = [];
+              stepsSorted.forEach(s => {
+                const ids = [
+                  ...(s.primaryComponentIds || []),
+                  ...(s.primaryComponentId ? [s.primaryComponentId] : [])
+                ];
+                ids.forEach(id => { if (impactedComponentIds.has(id)) impactedCompIdsInWf.push(id); });
+              });
+              const causeNames = (() => {
+                const names: string[] = [];
+                for (const id of impactedCompIdsInWf) {
+                  const causeId = impactCauseMap.get(id)?.causeId;
+                  const n = causeId ? compById.get(causeId)?.name : undefined;
+                  const comp = compById.get(id);
+                  const candidate = n || (comp && comp.status === 'offline' ? comp.name : undefined);
+                  if (candidate) names.push(candidate);
+                }
+                // Deduplicate while keeping order
+                return Array.from(new Set(names));
+              })();
+              // Guarantee display: if no specific causes were found, fallback to first offline root name (if any)
+              const primaryName = causeNames.length > 0
+                ? causeNames[0]
+                : (offlineRootNames[0] || undefined);
+              const moreCount = causeNames.length > 1 ? (causeNames.length - 1) : 0;
+
               return (
                 <div key={wf.id} className={cn("p-3 rounded-lg border transition-all duration-200")}> 
                   <div className="flex items-center gap-2 mb-0.5">
@@ -82,6 +144,27 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
                     >
                       {wf.criticality}
                     </Badge>
+                    {primaryName && (
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <span className="truncate">impacted by {primaryName}</span>
+                        {moreCount > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="underline decoration-dotted underline-offset-2 cursor-help whitespace-nowrap">+ {moreCount} more</span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <div className="text-xs">
+                                  {causeNames.map((n, i) => (
+                                    <div key={`${n}-${i}`}>{n}</div>
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    )}
                     <div className="ml-auto" />
                     <button
                       type="button"
