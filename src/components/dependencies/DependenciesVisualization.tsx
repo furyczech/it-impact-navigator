@@ -91,16 +91,18 @@ export const DependenciesVisualization = () => {
     switch (assetSort) {
       case 'status':
         return clone.sort((a, b) => String(a.status).localeCompare(String(b.status)) || a.name.localeCompare(b.name));
-      case 'criticality':
+      case 'criticality': {
         const order: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
         return clone.sort((a, b) => (order[a.criticality] - order[b.criticality]) || a.name.localeCompare(b.name));
-      case 'deps':
+      }
+      case 'deps': {
         const counts = (c: any) => {
           const incoming = dependencies.filter(d => d.targetId === c.id).length;
           const outgoing = dependencies.filter(d => d.sourceId === c.id).length;
           return incoming + outgoing;
         };
         return clone.sort((a, b) => counts(b) - counts(a) || a.name.localeCompare(b.name));
+      }
       default:
         return clone.sort((a, b) => a.name.localeCompare(b.name));
     }

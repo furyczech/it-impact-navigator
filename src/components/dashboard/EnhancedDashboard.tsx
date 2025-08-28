@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AlertPanel, AlertType as Alert } from "@/components/ui/alert-panel";
 import { NetworkTopology } from "@/components/ui/network-topology";
 import { Badge } from "@/components/ui/badge";
@@ -61,7 +61,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   // Business impact KPI removed from UI
 
   // Generate real alerts from component status and audit logs
-  const generateRealAlerts = (): Alert[] => {
+  const generateRealAlerts = useCallback((): Alert[] => {
     const alerts: Alert[] = [];
     const recentLogs = AuditService.getLogs(50, 'COMPONENT', 'UPDATE');
     
@@ -243,7 +243,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
       if (severityDiff !== 0) return severityDiff;
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
-  };
+  }, [components, dependencies]);
 
   // Manage alerts locally (ignore previous dismiss/ack so all show again)
   const [activeAlerts, setActiveAlerts] = useState<Alert[]>(() => generateRealAlerts());
@@ -258,7 +258,7 @@ export const EnhancedDashboard = ({ onQuickNav }: EnhancedDashboardProps) => {
   // Refresh alerts when data changes (no filtering/preservation)
   useEffect(() => {
     setActiveAlerts(generateRealAlerts());
-  }, [components, dependencies, lastRefresh]);
+  }, [components, dependencies, lastRefresh, generateRealAlerts]);
 
   const handleAlertClick = (alert: Alert) => {
     // Use actionUrl hash to pre-filter target pages

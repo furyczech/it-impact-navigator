@@ -22,13 +22,13 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
     // Per-workflow toggle: show all steps vs impacted-only (+context)
     const [showAllSteps, setShowAllSteps] = React.useState<Record<string, boolean>>({});
 
-    const isStepImpacted = (step: WorkflowStep): boolean => {
+    const isStepImpacted = React.useCallback((step: WorkflowStep): boolean => {
       const ids = [
         ...(step.primaryComponentIds || []),
         ...(step.primaryComponentId ? [step.primaryComponentId] : [])
       ];
       return ids.some(id => impactedComponentIds.has(id));
-    };
+    }, [impactedComponentIds]);
 
     // Precompute immediate offline cause per impacted component (downstream-only)
     const impactCauseMap = React.useMemo(() => {
@@ -77,7 +77,7 @@ export const ProcessImpactPanel = React.forwardRef<HTMLDivElement, ProcessImpact
           if (sdiff !== 0) return sdiff;
           return b.impactedStepIds.size - a.impactedStepIds.size;
         });
-    }, [workflows, impactedComponentIds]);
+    }, [workflows, isStepImpacted]);
 
     // Fallback list of offline root names (for guaranteed display)
     const offlineRootNames = React.useMemo(() => {

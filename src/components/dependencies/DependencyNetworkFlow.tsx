@@ -361,17 +361,14 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
       try { rfRef.current?.fitView({ padding: 0.2 }); } catch {}
     }, 0);
     return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutTrigger, groupBy, filteredComponents.length]);
+  }, [layoutTrigger, groupBy, filteredComponents.length, initialNodes, setNodes]);
 
   useEffect(() => {
     setEdges(initialEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredDependencies.length]);
+  }, [initialEdges, setEdges]);
 
   useEffect(() => {
     try { rfRef.current?.fitView({ padding: 0.2 }); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitViewTrigger]);
 
   useEffect(() => {
@@ -505,8 +502,7 @@ export const DependencyNetworkFlow = ({ components, dependencies, onAddDependenc
     };
     run();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutEngine, direction, filteredComponents, filteredDependencies, groupBy, layoutTrigger, impactedIds]);
+  }, [layoutEngine, direction, filteredComponents, filteredDependencies, groupBy, layoutTrigger, impactedIds, setNodes]);
 
   return (
     <div className={`bg-background rounded-lg border border-border ${fullscreen ? 'h-[90vh]' : 'h-[72vh] md:h-[80vh]'}`}>

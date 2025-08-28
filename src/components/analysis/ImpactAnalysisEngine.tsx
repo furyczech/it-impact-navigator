@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ITComponent, ComponentDependency, BusinessWorkflow } from "@/types/itiac";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
   
   // KPIs removed per request; no derived KPI metrics are computed here
 
-  const analyzeImpact = (componentId: string): ImpactResult => {
+  const analyzeImpact = useCallback((componentId: string): ImpactResult => {
     const component = components.find(c => c.id === componentId);
     if (!component) {
       return {
@@ -173,7 +173,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
       businessImpactScore,
       riskLevel
     };
-  };
+  }, [components, dependencies, workflows]);
 
   const analysisResults = useMemo<ImpactResult[]>(() => {
     // initial independent computation
@@ -211,7 +211,7 @@ export const ImpactAnalysisEngine = ({ components, dependencies, workflows }: Im
 
     const adjusted = Array.from(idToResult.values());
     return adjusted.sort((a, b) => b.businessImpactScore - a.businessImpactScore);
-  }, [components, dependencies, workflows]);
+  }, [components, dependencies, analyzeImpact]);
 
   const riskColorMap = {
     low: "success",

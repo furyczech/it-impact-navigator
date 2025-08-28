@@ -1,1 +1,0 @@
-// This file contained installation notes - removing as it's not needed

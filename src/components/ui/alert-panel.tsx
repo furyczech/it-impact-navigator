@@ -16,6 +16,8 @@ import {
   ChevronDown 
 } from "lucide-react";
 
+// Stable regex shared across callbacks
+const impactedRe = /^impacted-by-(offline|warning)-(.+?)-(.+)$/;
 export interface Alert {
   id: string;
   title: string;
@@ -156,17 +158,15 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       return msg.replace(re2, '').trimStart();
     };
 
-    // Reorder alerts: place impacted children right after their root alert
-    const impactedRe = /^impacted-by-(offline|warning)-(.+?)-(.+)$/;
-    const isRootAlert = (a: Alert) => a.id.startsWith('offline-') || a.id.startsWith('warning-');
-    const getRootIdFromImpacted = (a: Alert): string | null => {
+    const isRootAlert = React.useCallback((a: Alert) => a.id.startsWith('offline-') || a.id.startsWith('warning-'), []);
+    const getRootIdFromImpacted = React.useCallback((a: Alert): string | null => {
       const m = a.id.match(impactedRe);
       return m ? m[2] : null;
-    };
-    const getRootKeyFromRootAlert = (a: Alert): string | null => {
+    }, []);
+    const getRootKeyFromRootAlert = React.useCallback((a: Alert): string | null => {
       if (!isRootAlert(a)) return null;
       return a.id.replace(/^\w+-/, '');
-    };
+    }, [isRootAlert]);
 
     // Hide synthetic dependency summary alerts (e.g., "Critical Dependency Issues")
     const isDependencySummaryAlert = (a: Alert): boolean => {
@@ -219,15 +219,16 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
     // Default: expand all root alerts when the alert list changes
     React.useEffect(() => {
       const next = new Set<string>();
-      // Expand only real roots (non-child entries that are root alerts)
-      others.forEach(a => {
+      // Expand only real roots present in baseAlerts
+      baseAlerts.forEach(a => {
         if (isRootAlert(a)) {
           const rk = getRootKeyFromRootAlert(a);
           if (rk) next.add(rk);
         }
       });
       setExpandedRoots(next);
-    }, [baseAlerts]);
+    }, [baseAlerts, isRootAlert, getRootKeyFromRootAlert]);
+
     const toggleRoot = (rootKey: string) => {
       setExpandedRoots(prev => {
         const next = new Set(prev);
@@ -258,17 +259,17 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
     }, [dependencies, impactedComponentIds, components]);
 
     // Compute impacted processes when data is available
+    const isStepImpacted = React.useCallback((step: BusinessWorkflow["steps"][number]): boolean => {
+      const primaries = step.primaryComponentIds && step.primaryComponentIds.length
+        ? step.primaryComponentIds
+        : (step.primaryComponentId ? [step.primaryComponentId] : []);
+      return primaries.some(id => impactedComponentIds?.has(id));
+    }, [impactedComponentIds]);
+
     const { impactedProcessesCount, totalProcesses } = React.useMemo(() => {
       if (!canShowProcesses || !workflows || !impactedComponentIds) {
         return { impactedProcessesCount: 0, totalProcesses: 0 };
       }
-
-      const isStepImpacted = (step: BusinessWorkflow["steps"][number]): boolean => {
-        const primaries = step.primaryComponentIds && step.primaryComponentIds.length
-          ? step.primaryComponentIds
-          : (step.primaryComponentId ? [step.primaryComponentId] : []);
-        return primaries.some(id => impactedComponentIds.has(id));
-      };
 
       const isWorkflowImpacted = (wf: BusinessWorkflow): boolean => {
         return wf.steps.some(isStepImpacted);
@@ -277,7 +278,7 @@ const AlertPanel = React.forwardRef<HTMLDivElement, AlertPanelProps>(
       const total = workflows.length;
       const impacted = workflows.filter(isWorkflowImpacted).length;
       return { impactedProcessesCount: impacted, totalProcesses: total };
-    }, [canShowProcesses, workflows, impactedComponentIds]);
+    }, [canShowProcesses, workflows, impactedComponentIds, isStepImpacted]);
 
     return (
       <Card ref={ref} className={cn("bg-card border-border shadow-depth flex flex-col h-full", className)} {...props}>
