@@ -40,7 +40,8 @@ export const fetchDependencies = async (): Promise<ComponentDependency[]> => {
           targetId: dep.target_id,
           type: dep.type as ComponentDependency['type'],
           description: dep.description || '',
-          criticality: dep.criticality || 'medium'
+          criticality: dep.criticality || 'medium',
+          lastUpdated: new Date(dep.last_updated)
         };
         return dependency;
       } catch (mapError) {

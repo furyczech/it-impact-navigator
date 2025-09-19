@@ -655,8 +655,8 @@ const NetworkTopology = React.forwardRef<HTMLDivElement, NetworkTopologyProps>(
                       {n.component.owner && (
                         <div>Owner: {n.component.owner}</div>
                       )}
-                      {n.component.supportEmail && (
-                        <div>Support: {n.component.supportEmail}</div>
+                      {n.component.helpdeskEmail && (
+                        <div>Support: {n.component.helpdeskEmail}</div>
                       )}
                     </div>
                   </div>

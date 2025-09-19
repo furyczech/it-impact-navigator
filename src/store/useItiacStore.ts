@@ -11,7 +11,8 @@ import {
   fetchDependencies, 
   createDependency as createDependencyApi, 
   updateDependency as updateDependencyApi, 
-  deleteDependency as deleteDependencyApi
+  deleteDependency as deleteDependencyApi,
+  deleteComponentDependencies as deleteComponentDependenciesApi
 } from '@/services/dependencyService';
 import { 
   fetchWorkflows as fetchWorkflowsApi, 
@@ -229,15 +230,8 @@ export const useItiacStore = create<ItiacState>((set, get) => ({
       await deleteComponentApi(id);
       AuditService.logComponentAction('DELETE', component);
       
-      // Delete all related dependencies
-      const relatedDependencies = get().dependencies.filter(
-        d => d.sourceId === id || d.targetId === id
-      );
-      
-      // Delete related dependencies
-      await Promise.all(
-        relatedDependencies.map(dep => deleteDependencyApi(dep.id))
-      );
+      // Delete all related dependencies in bulk for this component (incoming and outgoing)
+      await deleteComponentDependenciesApi(id);
       
       set((state) => ({
         components: state.components.filter((c) => c.id !== id),
